@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Receptionist</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="chat-header">
+            <h1 id="business-name">Receptionist</h1>
+            <p class="subtitle">Virtual Receptionist</p>
+        </header>
+        
+        <div class="chat-container" id="chat-container">
+            <div class="message receptionist-message">
+                <div class="message-content">
+                    Hello! Welcome to our business. How can I assist you today?
+                </div>
+                <div class="message-time"></div>
+            </div>
+        </div>
+        
+        <div class="input-container">
+            <input 
+                type="text" 
+                id="message-input" 
+                placeholder="Type your message..." 
+                autocomplete="off"
+            >
+            <button id="send-button">Send</button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
+
+

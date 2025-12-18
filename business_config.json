@@ -1,0 +1,36 @@
+{
+  "business_name": "Sample Business",
+  "working_hours": {
+    "monday": "9:00 AM - 6:00 PM",
+    "tuesday": "9:00 AM - 6:00 PM",
+    "wednesday": "9:00 AM - 6:00 PM",
+    "thursday": "9:00 AM - 6:00 PM",
+    "friday": "9:00 AM - 6:00 PM",
+    "saturday": "10:00 AM - 4:00 PM",
+    "sunday": "Closed"
+  },
+  "services": [
+    {
+      "name": "Consultation",
+      "price": 50,
+      "duration": 30
+    },
+    {
+      "name": "Standard Service",
+      "price": 100,
+      "duration": 60
+    },
+    {
+      "name": "Premium Service",
+      "price": 150,
+      "duration": 90
+    }
+  ],
+  "contact_info": {
+    "phone": "+1 (555) 123-4567",
+    "email": "info@samplebusiness.com",
+    "address": "123 Main Street, City, State 12345"
+  }
+}
+
+
