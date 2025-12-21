@@ -5,7 +5,7 @@ Handles both web chat and Twilio voice calls.
 from fastapi import FastAPI, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response, HTMLResponse
+from fastapi.responses import FileResponse, Response, HTMLResponse, JSONResponse
 from typing import List, Optional
 import os
 from datetime import datetime
@@ -187,6 +187,41 @@ async def voice_status(
     except Exception as e:
         print(f"Status webhook error: {e}")
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/debug/ai")
+async def debug_ai():
+    """Debug endpoint to test AI provider connectivity."""
+    try:
+        from voice_handler import get_voice_handler
+        handler = get_voice_handler()
+        
+        # Test basic AI call
+        test_response = handler.provider.chat(
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Say hello in one word."}
+            ],
+            temperature=0.5,
+            max_tokens=10
+        )
+        
+        return JSONResponse({
+            "status": "ok",
+            "provider": type(handler.provider).__name__,
+            "test_response": test_response,
+            "groq_key_set": bool(os.getenv("GROQ_API_KEY")),
+            "ai_provider_env": os.getenv("AI_PROVIDER", "not set")
+        })
+    except Exception as e:
+        import traceback
+        return JSONResponse({
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "groq_key_set": bool(os.getenv("GROQ_API_KEY")),
+            "ai_provider_env": os.getenv("AI_PROVIDER", "not set")
+        }, status_code=500)
 
 
 # ============ Chat Endpoints ============
