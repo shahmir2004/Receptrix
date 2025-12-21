@@ -55,7 +55,7 @@ class TwilioService:
         # Create gather for speech input
         gather = Gather(
             input='speech',
-            action=f'{self.server_url}/voice/respond',
+            action='/voice/respond',
             method='POST',
             language='en-US',
             speech_timeout='auto',
@@ -73,7 +73,7 @@ class TwilioService:
         response.append(gather)
         
         # If no input, prompt again
-        response.redirect(f'{self.server_url}/voice/no-input')
+        response.redirect('/voice/no-input')
         
         return str(response)
     
@@ -128,7 +128,7 @@ class TwilioService:
             # Continue conversation
             gather = Gather(
                 input='speech',
-                action=f'{self.server_url}/voice/respond',
+                action='/voice/respond',
                 method='POST',
                 language='en-US',
                 speech_timeout='auto',
@@ -145,7 +145,7 @@ class TwilioService:
             response.append(gather)
             
             # Handle silence
-            response.redirect(f'{self.server_url}/voice/no-input')
+            response.redirect('/voice/no-input')
         
         return str(response)
     
@@ -160,7 +160,7 @@ class TwilioService:
         
         gather = Gather(
             input='speech',
-            action=f'{self.server_url}/voice/respond',
+            action='/voice/respond',
             method='POST',
             language='en-US',
             speech_timeout='auto',
