@@ -1,7 +1,8 @@
 """
 AI receptionist logic with intent detection and response generation.
 """
-import ollama
+import os
+import httpx
 from typing import List, Dict, Optional
 from models import ChatMessage, BusinessConfig
 from config import get_config
@@ -188,23 +189,33 @@ Keep responses brief and natural. If the user wants to book, guide them on what 
         })
         
         try:
-            response = ollama.chat(
-                model=self.model_name,
-                messages=messages
-            )
-            # Handle different possible response formats
-            if isinstance(response, dict):
-                if "message" in response and isinstance(response["message"], dict):
-                    content = response["message"].get("content", "")
-                else:
-                    content = response.get("content", "")
-            else:
-                content = str(response)
+            # Use Groq API for AI responses
+            groq_api_key = os.getenv("GROQ_API_KEY", "")
+            if not groq_api_key:
+                return "I'm here to help! How can I assist you today?"
+            
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {groq_api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "llama-3.1-8b-instant",
+                        "messages": messages,
+                        "max_tokens": 300,
+                        "temperature": 0.7
+                    }
+                )
+                response.raise_for_status()
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
             
             return content.strip() if content else "I'm here to help! How can I assist you today?"
         except Exception as e:
             # Fallback response if AI fails
-            print(f"Ollama error: {e}")  # Log error for debugging
+            print(f"AI error: {e}")  # Log error for debugging
             return "I apologize, but I'm having trouble processing that right now. Could you please rephrase your question?"
     
     def handle_message(
