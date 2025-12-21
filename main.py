@@ -128,6 +128,8 @@ async def voice_respond(
     Called by Twilio when caller speaks.
     """
     try:
+        print(f"Voice respond - CallSid: {CallSid}, From: {From}, Speech: {SpeechResult}")
+        
         if not SpeechResult:
             # No speech detected, handle as no input
             twilio_service = get_twilio_service()
@@ -139,7 +141,9 @@ async def voice_respond(
         
         return Response(content=twiml, media_type="application/xml")
     except Exception as e:
+        import traceback
         print(f"Voice respond error: {e}")
+        traceback.print_exc()
         error_twiml = """
         <Response>
             <Say voice="Polly.Joanna">I'm sorry, could you please repeat that?</Say>
