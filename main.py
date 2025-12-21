@@ -224,6 +224,34 @@ async def debug_ai():
         }, status_code=500)
 
 
+@app.get("/debug/voice")
+async def debug_voice():
+    """Debug the full voice handler flow."""
+    try:
+        from voice_handler import get_voice_handler
+        handler = get_voice_handler()
+        
+        # Test the full generate_response
+        response = handler.generate_response(
+            caller_input="Hello, what services do you offer?",
+            call_sid="DEBUG_TEST_123",
+            caller_phone="+1234567890"
+        )
+        
+        return JSONResponse({
+            "status": "ok",
+            "response_text": response.text,
+            "should_end_call": response.should_end_call
+        })
+    except Exception as e:
+        import traceback
+        return JSONResponse({
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }, status_code=500)
+
+
 # ============ Chat Endpoints ============
 
 @app.post("/chat", response_model=ChatResponse)
