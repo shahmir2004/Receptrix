@@ -89,8 +89,11 @@ class TwilioService:
         Returns:
             TwiML XML string
         """
-        # Update call status
-        update_call_log(call_sid, call_status=CallStatus.IN_PROGRESS)
+        # Update call status (ignore if call doesn't exist)
+        try:
+            update_call_log(call_sid, call_status=CallStatus.IN_PROGRESS)
+        except Exception as e:
+            print(f"Could not update call log: {e}")
         
         # Get AI response
         voice_handler = get_voice_handler()
