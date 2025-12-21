@@ -1,288 +1,573 @@
-# 📞 Receptrix - AI Voice Receptionist# AI Receptionist MVP
+# 🤖 Receptrix - AI Voice Receptionist# 📞 Receptrix - AI Voice Receptionist# AI Receptionist MVP
 
 
 
-An autonomous AI-powered receptionist that handles phone calls, schedules appointments, and manages your business communications automatically.A generic, production-style AI-powered virtual receptionist system built with Python FastAPI, Ollama (Llama 3), SQLite, and vanilla JavaScript.
+An autonomous AI-powered voice receptionist system that handles phone calls, manages appointments, and provides intelligent customer service for any business.
 
 
+
+![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)An autonomous AI-powered receptionist that handles phone calls, schedules appointments, and manages your business communications automatically.A generic, production-style AI-powered virtual receptionist system built with Python FastAPI, Ollama (Llama 3), SQLite, and vanilla JavaScript.
+
+![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-green.svg)
+
+![Twilio](https://img.shields.io/badge/Twilio-Voice-red.svg)
+
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ## ✨ Features## Overview
 
+## ✨ Features
 
 
-- **🤖 AI Voice Handling**: Natural conversation with callers using OpenAI GPTThis system acts as a virtual receptionist that can:
 
-- **📞 Phone Integration**: Twilio-powered phone call handling with speech-to-text- Handle customer conversations via chat
+- **🎙️ Voice Call Handling** - Answers incoming calls via Twilio with natural AI conversation
 
-- **📅 Smart Scheduling**: Automatic appointment booking with conflict detection- Answer business FAQs
+- **📅 Appointment Management** - Books, reschedules, and cancels appointments automatically- **🤖 AI Voice Handling**: Natural conversation with callers using OpenAI GPTThis system acts as a virtual receptionist that can:
+
+- **🧠 Multi-AI Provider Support** - Works with Groq (free), OpenAI, HuggingFace, or Ollama
+
+- **📊 Real-time Dashboard** - Web interface to monitor calls, appointments, and statistics- **📞 Phone Integration**: Twilio-powered phone call handling with speech-to-text- Handle customer conversations via chat
+
+- **🌍 Timezone Aware** - Configurable business hours and timezone support
+
+- **💾 Persistent Storage** - SQLite database for all appointments, callers, and call logs- **📅 Smart Scheduling**: Automatic appointment booking with conflict detection- Answer business FAQs
+
+- **🔄 Conflict Detection** - Prevents double-booking with smart availability checking
 
 - **👤 Caller Recognition**: Remembers returning callers by phone number- Provide service information and pricing
 
+## 🏗️ Architecture
+
 - **📊 Dashboard**: Web interface to manage appointments and view call logs- Share working hours and contact information
-
-- **💬 Chat Interface**: Test the AI receptionist via web chat- Process appointment bookings
-
-- **🇵🇰 Pakistan Optimized**: Configured for PKT timezone and local phone numbers- Store bookings in a database
-
-
-
-## 🚀 Quick Start## Tech Stack
-
-
-
-### Prerequisites- **Backend**: Python 3.8+ with FastAPI
-
-- **AI**: Ollama with Llama 3 model
-
-- Python 3.9+- **Database**: SQLite
-
-- Twilio Account (for phone calls)- **Frontend**: HTML, CSS, Vanilla JavaScript
-
-- OpenAI API Key (for AI responses)- **Configuration**: JSON file
-
-- ngrok or public server (for Twilio webhooks)
-
-## Prerequisites
-
-### Installation
-
-1. **Python 3.8 or higher**
-
-1. **Clone and navigate to the project:**   ```bash
-
-   ```bash   python --version
-
-   cd Receptrix   ```
-
-   ```
-
-2. **Ollama installed and running**
-
-2. **Create a virtual environment:**   - Download from: https://ollama.ai/
-
-   ```bash   - Install Ollama on your system
-
-   python -m venv venv   - Pull the Llama 3 model:
-
-        ```bash
-
-   # Windows     ollama pull llama3
-
-   venv\Scripts\activate     ```
-
-      - Verify Ollama is running:
-
-   # Linux/Mac     ```bash
-
-   source venv/bin/activate     ollama list
-
-   ```     ```
-
-
-
-3. **Install dependencies:**## Installation
-
-   ```bash
-
-   pip install -r requirements.txt1. **Clone or navigate to the project directory**
-
-   ```   ```bash
-
-   cd Receptrix
-
-4. **Create your `.env` file:**   ```
-
-   ```bash
-
-   copy .env.example .env2. **Create a virtual environment (recommended)**
-
-   ```   ```bash
-
-   python -m venv venv
-
-5. **Edit `.env` with your credentials:**   
-
-   ```env   # On Windows:
-
-   # Twilio Configuration   venv\Scripts\activate
-
-   TWILIO_ACCOUNT_SID=your_account_sid   
-
-   TWILIO_AUTH_TOKEN=your_auth_token   # On macOS/Linux:
-
-   TWILIO_PHONE_NUMBER=+1234567890   source venv/bin/activate
-
-      ```
-
-   # Your Phone Number
-
-   MY_PHONE_NUMBER=+9230952181423. **Install Python dependencies**
-
-      ```bash
-
-   # OpenAI Configuration   pip install -r requirements.txt
-
-   OPENAI_API_KEY=your_openai_api_key   ```
-
-   
-
-   # Server Configuration## Configuration
-
-   SERVER_URL=https://your-ngrok-url.ngrok.io
-
-   PORT=8000Edit `business_config.json` to customize your business details:
-
-   ```
-
-```json
-
-6. **Configure your business in `business_config.json`:**{
-
-   ```json  "business_name": "Your Business Name",
-
-   {  "working_hours": {
-
-     "business_name": "Your Business Name",    "monday": "9:00 AM - 6:00 PM",
-
-     "timezone": "Asia/Karachi",    ...
-
-     "services": [...],  },
-
-     "working_hours": {...},  "services": [
-
-     "contact_info": {...}    {
-
-   }      "name": "Service Name",
-
-   ```      "price": 100,
-
-      "duration": 60
-
-7. **Run the server:**    }
-
-   ```bash  ],
-
-   python main.py  "contact_info": {
-
-   ```    "phone": "+1 (555) 123-4567",
-
-    "email": "info@business.com",
-
-8. **Access the dashboard:**    "address": "123 Main St, City, State"
-
-   Open `http://localhost:8000` in your browser  }
-
-}
-
-## 📱 Twilio Setup```
-
-
-
-### Getting a Phone Number## Running the Application
-
-
-
-1. Create a [Twilio account](https://www.twilio.com/try-twilio)1. **Start the FastAPI server**
-
-2. Get a phone number with **Voice** capabilities   ```bash
-
-3. For Pakistan, you may need to use a US/UK number and forward calls   python main.py
-
-   ```
-
-### Configuring Webhooks   
-
-   Or using uvicorn directly:
-
-1. Go to [Twilio Console](https://console.twilio.com) → Phone Numbers → Manage → Active Numbers   ```bash
-
-2. Click on your phone number   uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-3. Under **Voice & Fax**, configure:   ```
-
-
-
-   | Setting | Value |2. **Open your browser**
-
-   |---------|-------|   Navigate to: `http://localhost:8000`
-
-   | A CALL COMES IN | Webhook: `https://your-domain.com/voice/incoming` |
-
-   | HTTP Method | POST |The chat interface should load automatically.
-
-   | STATUS CALLBACK URL | `https://your-domain.com/voice/status` |
-
-## API Endpoints
-
-### Using ngrok for Development
-
-- `GET /` - Serves the frontend HTML
-
-```bash- `POST /chat` - Send a chat message and get AI response
-
-# Install ngrok- `GET /services` - Get list of available services
-
-# Download from https://ngrok.com/download- `POST /book` - Create a new booking
-
-- `GET /bookings` - Get all bookings (admin/demo)
-
-# Start ngrok tunnel- `GET /config` - Get business configuration
-
-ngrok http 8000
-
-## Project Structure
-
-# Copy the HTTPS URL (e.g., https://abc123.ngrok.io)
-
-# Update your .env file with this URL```
-
-# Update Twilio webhook URLsReceptrix/
-
-```├── main.py                 # FastAPI application
-
-├── models.py               # Pydantic data models
-
-## 🏗️ Project Structure├── config.py               # Configuration loader
-
-├── database.py             # SQLite database operations
-
-```├── receptionist.py         # AI receptionist logic
-
-Receptrix/├── business_config.json    # Business configuration
-
-├── main.py              # FastAPI application & endpoints├── requirements.txt        # Python dependencies
-
-├── models.py            # Data models (Pydantic)├── index.html             # Frontend HTML
-
-├── database.py          # SQLite database operations├── style.css              # Frontend styles
-
-├── config.py            # Configuration loader├── script.js              # Frontend JavaScript
-
-├── receptionist.py      # Chat-based AI logic├── receptionist.db        # SQLite database (created automatically)
-
-├── voice_handler.py     # AI voice conversation handler└── README.md              # This file
-
-├── twilio_service.py    # Twilio integration```
-
-├── business_config.json # Business settings
-
-├── .env                 # Environment variables (create this)## How It Works
-
-├── .env.example         # Example environment file
-
-├── requirements.txt     # Python dependencies1. **Intent Detection**: The system uses keyword-based intent detection to categorize user messages (greeting, service inquiry, pricing, hours, booking, etc.)
-
-├── index.html           # Dashboard frontend
-
-├── style.css            # Dashboard styles2. **Response Generation**: 
-
-├── script.js            # Dashboard JavaScript   - For structured queries (services, pricing, hours), rule-based responses are used for consistency
-
-└── receptionist.db      # SQLite database (auto-created)   - For conversational queries (greetings, bookings, general questions), the Ollama LLM generates responses
 
 ```
 
-3. **Booking Flow**: When a user expresses interest in booking, the AI guides them through providing necessary information (name, service, date, time), which is then stored in SQLite
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐- **💬 Chat Interface**: Test the AI receptionist via web chat- Process appointment bookings
+
+│   Phone Call    │────▶│     Twilio      │────▶│   FastAPI App   │
+
+│   (Customer)    │     │   (Voice API)   │     │   (Webhooks)    │- **🇵🇰 Pakistan Optimized**: Configured for PKT timezone and local phone numbers- Store bookings in a database
+
+└─────────────────┘     └─────────────────┘     └────────┬────────┘
+
+                                                         │
+
+                        ┌────────────────────────────────┼────────────────────────────────┐
+
+                        │                                ▼                                │## 🚀 Quick Start## Tech Stack
+
+                        │  ┌─────────────────┐   ┌─────────────────┐   ┌──────────────┐  │
+
+                        │  │  Voice Handler  │──▶│   AI Provider   │   │   Database   │  │
+
+                        │  │  (Conversation) │   │ (Groq/OpenAI)   │   │   (SQLite)   │  │
+
+                        │  └─────────────────┘   └─────────────────┘   └──────────────┘  │### Prerequisites- **Backend**: Python 3.8+ with FastAPI
+
+                        │                                                                 │
+
+                        │                    Receptrix Server                             │- **AI**: Ollama with Llama 3 model
+
+                        └─────────────────────────────────────────────────────────────────┘
+
+```- Python 3.9+- **Database**: SQLite
+
+
+
+## 📁 Project Structure- Twilio Account (for phone calls)- **Frontend**: HTML, CSS, Vanilla JavaScript
+
+
+
+```- OpenAI API Key (for AI responses)- **Configuration**: JSON file
+
+Receptrix/
+
+├── main.py              # FastAPI application & API endpoints- ngrok or public server (for Twilio webhooks)
+
+├── voice_handler.py     # AI conversation handler for voice calls
+
+├── twilio_service.py    # Twilio integration & TwiML generation## Prerequisites
+
+├── receptionist.py      # Core receptionist AI logic
+
+├── database.py          # SQLite database operations### Installation
+
+├── models.py            # Pydantic data models
+
+├── config.py            # Configuration management1. **Python 3.8 or higher**
+
+├── business_config.json # Business settings (hours, services, etc.)
+
+├── index.html           # Dashboard frontend1. **Clone and navigate to the project:**   ```bash
+
+├── style.css            # Dashboard styling
+
+├── script.js            # Dashboard JavaScript   ```bash   python --version
+
+├── requirements.txt     # Python dependencies
+
+├── Procfile             # Render deployment config   cd Receptrix   ```
+
+├── render.yaml          # Render service definition
+
+├── runtime.txt          # Python version specification   ```
+
+├── .env.example         # Environment variables template
+
+└── README.md            # This file2. **Ollama installed and running**
+
+```
+
+2. **Create a virtual environment:**   - Download from: https://ollama.ai/
+
+## 🚀 Quick Start
+
+   ```bash   - Install Ollama on your system
+
+### Prerequisites
+
+   python -m venv venv   - Pull the Llama 3 model:
+
+- Python 3.11+
+
+- Twilio Account (for phone calls)        ```bash
+
+- Groq API Key (free) or OpenAI API Key
+
+   # Windows     ollama pull llama3
+
+### 1. Clone the Repository
+
+   venv\Scripts\activate     ```
+
+```bash
+
+git clone https://github.com/shahmir2004/Receptrix.git      - Verify Ollama is running:
+
+cd Receptrix
+
+```   # Linux/Mac     ```bash
+
+
+
+### 2. Create Virtual Environment   source venv/bin/activate     ollama list
+
+
+
+```bash   ```     ```
+
+python -m venv venv
+
+
+
+# Windows
+
+venv\Scripts\activate3. **Install dependencies:**## Installation
+
+
+
+# Linux/Mac   ```bash
+
+source venv/bin/activate
+
+```   pip install -r requirements.txt1. **Clone or navigate to the project directory**
+
+
+
+### 3. Install Dependencies   ```   ```bash
+
+
+
+```bash   cd Receptrix
+
+pip install -r requirements.txt
+
+```4. **Create your `.env` file:**   ```
+
+
+
+### 4. Configure Environment Variables   ```bash
+
+
+
+Copy the example environment file and fill in your credentials:   copy .env.example .env2. **Create a virtual environment (recommended)**
+
+
+
+```bash   ```   ```bash
+
+cp .env.example .env
+
+```   python -m venv venv
+
+
+
+Edit `.env` with your settings:5. **Edit `.env` with your credentials:**   
+
+
+
+```env   ```env   # On Windows:
+
+# AI Provider (groq, openai, huggingface, ollama)
+
+AI_PROVIDER=groq   # Twilio Configuration   venv\Scripts\activate
+
+GROQ_API_KEY=your-groq-api-key
+
+   TWILIO_ACCOUNT_SID=your_account_sid   
+
+# Twilio Credentials
+
+TWILIO_ACCOUNT_SID=your-twilio-sid   TWILIO_AUTH_TOKEN=your_auth_token   # On macOS/Linux:
+
+TWILIO_AUTH_TOKEN=your-twilio-token
+
+TWILIO_PHONE_NUMBER=+1234567890   TWILIO_PHONE_NUMBER=+1234567890   source venv/bin/activate
+
+
+
+# Business Settings      ```
+
+BUSINESS_NAME=Your Business Name
+
+BUSINESS_TIMEZONE=Asia/Karachi   # Your Phone Number
+
+```
+
+   MY_PHONE_NUMBER=+9230952181423. **Install Python dependencies**
+
+### 5. Run the Server
+
+      ```bash
+
+```bash
+
+python main.py   # OpenAI Configuration   pip install -r requirements.txt
+
+```
+
+   OPENAI_API_KEY=your_openai_api_key   ```
+
+The server will start at `http://localhost:8000`
+
+   
+
+## 🌐 Deployment on Render
+
+   # Server Configuration## Configuration
+
+### 1. Push to GitHub
+
+   SERVER_URL=https://your-ngrok-url.ngrok.io
+
+```bash
+
+git add .   PORT=8000Edit `business_config.json` to customize your business details:
+
+git commit -m "Initial commit"
+
+git push origin main   ```
+
+```
+
+```json
+
+### 2. Create Render Service
+
+6. **Configure your business in `business_config.json`:**{
+
+1. Go to [render.com](https://render.com) and sign up/login
+
+2. Click **New +** → **Web Service**   ```json  "business_name": "Your Business Name",
+
+3. Connect your GitHub repository
+
+4. Configure:   {  "working_hours": {
+
+   - **Name**: `receptrix`
+
+   - **Runtime**: Python 3     "business_name": "Your Business Name",    "monday": "9:00 AM - 6:00 PM",
+
+   - **Build Command**: `pip install -r requirements.txt`
+
+   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`     "timezone": "Asia/Karachi",    ...
+
+
+
+### 3. Add Environment Variables     "services": [...],  },
+
+
+
+In Render dashboard, add these environment variables:     "working_hours": {...},  "services": [
+
+
+
+| Key | Value |     "contact_info": {...}    {
+
+|-----|-------|
+
+| `AI_PROVIDER` | `groq` |   }      "name": "Service Name",
+
+| `GROQ_API_KEY` | `your-groq-api-key` |
+
+| `TWILIO_ACCOUNT_SID` | `your-twilio-sid` |   ```      "price": 100,
+
+| `TWILIO_AUTH_TOKEN` | `your-twilio-token` |
+
+| `TWILIO_PHONE_NUMBER` | `+your-twilio-number` |      "duration": 60
+
+| `BUSINESS_NAME` | `Your Business Name` |
+
+| `BUSINESS_TIMEZONE` | `Asia/Karachi` |7. **Run the server:**    }
+
+
+
+### 4. Configure Twilio Webhooks   ```bash  ],
+
+
+
+After deployment, configure your Twilio phone number:   python main.py  "contact_info": {
+
+
+
+1. Go to [Twilio Console](https://console.twilio.com)   ```    "phone": "+1 (555) 123-4567",
+
+2. Navigate to **Phone Numbers** → **Manage** → **Active Numbers**
+
+3. Click on your phone number    "email": "info@business.com",
+
+4. Under **Voice Configuration**:
+
+   - **A Call Comes In**: Webhook8. **Access the dashboard:**    "address": "123 Main St, City, State"
+
+   - **URL**: `https://your-app.onrender.com/voice/incoming`
+
+   - **HTTP Method**: POST   Open `http://localhost:8000` in your browser  }
+
+
+
+## 📡 API Endpoints}
+
+
+
+### Voice Endpoints (Twilio Webhooks)## 📱 Twilio Setup```
+
+
+
+| Endpoint | Method | Description |
+
+|----------|--------|-------------|
+
+| `/voice/incoming` | POST | Handles incoming calls from Twilio |### Getting a Phone Number## Running the Application
+
+| `/voice/process` | POST | Processes speech input and generates AI response |
+
+| `/voice/transcribe` | POST | Handles speech transcription |
+
+
+
+### Dashboard Endpoints1. Create a [Twilio account](https://www.twilio.com/try-twilio)1. **Start the FastAPI server**
+
+
+
+| Endpoint | Method | Description |2. Get a phone number with **Voice** capabilities   ```bash
+
+|----------|--------|-------------|
+
+| `/` | GET | Dashboard web interface |3. For Pakistan, you may need to use a US/UK number and forward calls   python main.py
+
+| `/stats` | GET | Get dashboard statistics |
+
+| `/config` | GET | Get business configuration |   ```
+
+| `/appointments` | GET | List all appointments |
+
+| `/appointments` | POST | Create new appointment |### Configuring Webhooks   
+
+| `/calls` | GET | Get call logs |
+
+| `/available-slots` | GET | Get available time slots |   Or using uvicorn directly:
+
+
+
+### Chat Endpoints1. Go to [Twilio Console](https://console.twilio.com) → Phone Numbers → Manage → Active Numbers   ```bash
+
+
+
+| Endpoint | Method | Description |2. Click on your phone number   uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+|----------|--------|-------------|
+
+| `/chat` | POST | Send message to AI receptionist |3. Under **Voice & Fax**, configure:   ```
+
+| `/book` | POST | Book an appointment |
+
+| `/bookings` | GET | Get all bookings |
+
+
+
+## ⚙️ Configuration   | Setting | Value |2. **Open your browser**
+
+
+
+### Business Configuration (`business_config.json`)   |---------|-------|   Navigate to: `http://localhost:8000`
+
+
+
+```json   | A CALL COMES IN | Webhook: `https://your-domain.com/voice/incoming` |
+
+{
+
+  "business_name": "Your Business",   | HTTP Method | POST |The chat interface should load automatically.
+
+  "business_hours": {
+
+    "monday": {"open": "09:00", "close": "18:00"},   | STATUS CALLBACK URL | `https://your-domain.com/voice/status` |
+
+    "tuesday": {"open": "09:00", "close": "18:00"}
+
+  },## API Endpoints
+
+  "services": [
+
+    {"name": "Consultation", "duration": 30, "price": 1000},### Using ngrok for Development
+
+    {"name": "Follow-up", "duration": 15, "price": 500}
+
+  ],- `GET /` - Serves the frontend HTML
+
+  "timezone": "Asia/Karachi",
+
+  "currency": "PKR",```bash- `POST /chat` - Send a chat message and get AI response
+
+  "phone_number": "+923095218142"
+
+}# Install ngrok- `GET /services` - Get list of available services
+
+```
+
+# Download from https://ngrok.com/download- `POST /book` - Create a new booking
+
+### AI Providers
+
+- `GET /bookings` - Get all bookings (admin/demo)
+
+| Provider | Free Tier | Model |
+
+|----------|-----------|-------|# Start ngrok tunnel- `GET /config` - Get business configuration
+
+| **Groq** | ✅ Yes | Llama 3 70B |
+
+| OpenAI | ❌ Paid | GPT-4 |ngrok http 8000
+
+| HuggingFace | ✅ Limited | Various |
+
+| Ollama | ✅ Local | Various |## Project Structure
+
+
+
+## 🔧 Development# Copy the HTTPS URL (e.g., https://abc123.ngrok.io)
+
+
+
+### Running Locally with ngrok# Update your .env file with this URL```
+
+
+
+For local development with Twilio:# Update Twilio webhook URLsReceptrix/
+
+
+
+```bash```├── main.py                 # FastAPI application
+
+# Terminal 1: Start the server
+
+python main.py├── models.py               # Pydantic data models
+
+
+
+# Terminal 2: Start ngrok tunnel## 🏗️ Project Structure├── config.py               # Configuration loader
+
+ngrok http 8000
+
+```├── database.py             # SQLite database operations
+
+
+
+Use the ngrok URL for Twilio webhooks during development.```├── receptionist.py         # AI receptionist logic
+
+
+
+### Database SchemaReceptrix/├── business_config.json    # Business configuration
+
+
+
+The application uses SQLite with the following tables:├── main.py              # FastAPI application & endpoints├── requirements.txt        # Python dependencies
+
+
+
+- **callers** - Stores caller information (phone, name, preferences)├── models.py            # Data models (Pydantic)├── index.html             # Frontend HTML
+
+- **appointments** - Stores all appointments with status tracking
+
+- **call_logs** - Logs all incoming calls with transcripts├── database.py          # SQLite database operations├── style.css              # Frontend styles
+
+- **bookings** - Legacy booking system for web interface
+
+├── config.py            # Configuration loader├── script.js              # Frontend JavaScript
+
+## 🤝 Contributing
+
+├── receptionist.py      # Chat-based AI logic├── receptionist.db        # SQLite database (created automatically)
+
+1. Fork the repository
+
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)├── voice_handler.py     # AI voice conversation handler└── README.md              # This file
+
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+
+4. Push to the branch (`git push origin feature/amazing-feature`)├── twilio_service.py    # Twilio integration```
+
+5. Open a Pull Request
+
+├── business_config.json # Business settings
+
+## 📄 License
+
+├── .env                 # Environment variables (create this)## How It Works
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+├── .env.example         # Example environment file
+
+## 🙏 Acknowledgments
+
+├── requirements.txt     # Python dependencies1. **Intent Detection**: The system uses keyword-based intent detection to categorize user messages (greeting, service inquiry, pricing, hours, booking, etc.)
+
+- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
+
+- [Twilio](https://www.twilio.com/) - Voice and messaging APIs├── index.html           # Dashboard frontend
+
+- [Groq](https://groq.com/) - Fast AI inference
+
+- [Render](https://render.com/) - Cloud hosting platform├── style.css            # Dashboard styles2. **Response Generation**: 
+
+
+
+## 📞 Support├── script.js            # Dashboard JavaScript   - For structured queries (services, pricing, hours), rule-based responses are used for consistency
+
+
+
+For support, please open an issue on GitHub or contact the maintainers.└── receptionist.db      # SQLite database (auto-created)   - For conversational queries (greetings, bookings, general questions), the Ollama LLM generates responses
+
+
+
+---```
+
+
+
+**Made with ❤️ by Shahmir**3. **Booking Flow**: When a user expresses interest in booking, the AI guides them through providing necessary information (name, service, date, time), which is then stored in SQLite
+
 
 ## 📡 API Endpoints
 
