@@ -3,36 +3,290 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Receptionist</title>
+    <title>AI Voice Receptionist - Dashboard</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="chat-header">
-            <h1 id="business-name">Receptionist</h1>
-            <p class="subtitle">Virtual Receptionist</p>
-        </header>
-        
-        <div class="chat-container" id="chat-container">
-            <div class="message receptionist-message">
-                <div class="message-content">
-                    Hello! Welcome to our business. How can I assist you today?
-                </div>
-                <div class="message-time"></div>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>📞 Receptrix</h2>
+                <p class="subtitle">AI Voice Receptionist</p>
             </div>
-        </div>
-        
-        <div class="input-container">
-            <input 
-                type="text" 
-                id="message-input" 
-                placeholder="Type your message..." 
-                autocomplete="off"
-            >
-            <button id="send-button">Send</button>
+            <ul class="nav-menu">
+                <li class="nav-item active" data-tab="dashboard">
+                    <span class="nav-icon">📊</span> Dashboard
+                </li>
+                <li class="nav-item" data-tab="appointments">
+                    <span class="nav-icon">📅</span> Appointments
+                </li>
+                <li class="nav-item" data-tab="calls">
+                    <span class="nav-icon">📱</span> Call Logs
+                </li>
+                <li class="nav-item" data-tab="chat">
+                    <span class="nav-icon">💬</span> Test Chat
+                </li>
+                <li class="nav-item" data-tab="settings">
+                    <span class="nav-icon">⚙️</span> Settings
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Tab -->
+            <section id="dashboard" class="tab-content active">
+                <div class="page-header">
+                    <h1>Dashboard</h1>
+                    <p>Overview of your AI receptionist activity</p>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">📅</div>
+                        <div class="stat-info">
+                            <h3 id="total-appointments">0</h3>
+                            <p>Total Appointments</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📆</div>
+                        <div class="stat-info">
+                            <h3 id="today-appointments">0</h3>
+                            <p>Today's Appointments</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📞</div>
+                        <div class="stat-info">
+                            <h3 id="total-calls">0</h3>
+                            <p>Total Calls</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-info">
+                            <h3 id="completed-calls">0</h3>
+                            <p>Completed Calls</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h3>Today's Schedule</h3>
+                        <div id="todays-schedule" class="schedule-list">
+                            <p class="empty-state">No appointments scheduled for today</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>Recent Calls</h3>
+                        <div id="recent-calls" class="calls-list">
+                            <p class="empty-state">No recent calls</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Appointments Tab -->
+            <section id="appointments" class="tab-content">
+                <div class="page-header">
+                    <h1>Appointments</h1>
+                    <button class="btn-primary" onclick="showNewAppointmentModal()">+ New Appointment</button>
+                </div>
+                
+                <div class="filters">
+                    <input type="date" id="filter-date" onchange="filterAppointments()">
+                    <select id="filter-status" onchange="filterAppointments()">
+                        <option value="">All Status</option>
+                        <option value="scheduled">Scheduled</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Name</th>
+                                <th>Phone</th>
+                                <th>Service</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appointments-table">
+                            <tr>
+                                <td colspan="7" class="empty-state">Loading appointments...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Call Logs Tab -->
+            <section id="calls" class="tab-content">
+                <div class="page-header">
+                    <h1>Call Logs</h1>
+                    <p>History of all incoming calls handled by AI</p>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date/Time</th>
+                                <th>Caller</th>
+                                <th>Duration</th>
+                                <th>Status</th>
+                                <th>Appointment</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="calls-table">
+                            <tr>
+                                <td colspan="6" class="empty-state">Loading call logs...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Chat Test Tab -->
+            <section id="chat" class="tab-content">
+                <div class="page-header">
+                    <h1>Test Chat</h1>
+                    <p>Test the AI receptionist responses</p>
+                </div>
+                
+                <div class="chat-wrapper">
+                    <div class="chat-container" id="chat-container">
+                        <div class="message receptionist-message">
+                            <div class="message-content">
+                                Hello! Welcome to our business. How can I assist you today?
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="input-container">
+                        <input 
+                            type="text" 
+                            id="message-input" 
+                            placeholder="Type your message..." 
+                            autocomplete="off"
+                        >
+                        <button id="send-button" class="btn-primary">Send</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Tab -->
+            <section id="settings" class="tab-content">
+                <div class="page-header">
+                    <h1>Settings</h1>
+                    <p>Configure your AI receptionist</p>
+                </div>
+
+                <div class="settings-grid">
+                    <div class="card">
+                        <h3>Business Information</h3>
+                        <div id="business-info">
+                            <p><strong>Name:</strong> <span id="config-name">Loading...</span></p>
+                            <p><strong>Phone:</strong> <span id="config-phone">Loading...</span></p>
+                            <p><strong>Email:</strong> <span id="config-email">Loading...</span></p>
+                            <p><strong>Address:</strong> <span id="config-address">Loading...</span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>Working Hours</h3>
+                        <div id="working-hours">
+                            <p>Loading...</p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Services</h3>
+                        <div id="services-list">
+                            <p>Loading...</p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Twilio Setup Instructions</h3>
+                        <div class="setup-instructions">
+                            <ol>
+                                <li>Create a <a href="https://www.twilio.com/try-twilio" target="_blank">Twilio account</a></li>
+                                <li>Get a phone number with voice capabilities</li>
+                                <li>Configure the webhook URL in Twilio Console:
+                                    <code>https://your-domain.com/voice/incoming</code></li>
+                                <li>Set status callback URL:
+                                    <code>https://your-domain.com/voice/status</code></li>
+                                <li>Add your credentials to <code>.env</code> file</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- New Appointment Modal -->
+    <div id="appointment-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <h2>New Appointment</h2>
+            <form id="appointment-form" onsubmit="createAppointment(event)">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="apt-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="tel" id="apt-phone" required placeholder="+92 3xx xxxxxxx">
+                </div>
+                <div class="form-group">
+                    <label>Service</label>
+                    <select id="apt-service" required>
+                        <option value="">Select a service</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="apt-date" required>
+                </div>
+                <div class="form-group">
+                    <label>Time</label>
+                    <select id="apt-time" required>
+                        <option value="">Select date first</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Notes (Optional)</label>
+                    <textarea id="apt-notes"></textarea>
+                </div>
+                <button type="submit" class="btn-primary">Create Appointment</button>
+            </form>
         </div>
     </div>
-    
+
+    <!-- Transcript Modal -->
+    <div id="transcript-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeTranscriptModal()">&times;</span>
+            <h2>Call Transcript</h2>
+            <div id="transcript-content" class="transcript-content">
+                <p>No transcript available</p>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>
