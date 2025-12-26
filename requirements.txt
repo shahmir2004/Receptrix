@@ -1,4 +1,4 @@
-# Core Framework
+# Core Framewo# SignalWire uses TwiML format - no SDK needed, using httpx for API calls
 fastapi>=0.104.0
 uvicorn>=0.24.0
 pydantic>=2.5.0

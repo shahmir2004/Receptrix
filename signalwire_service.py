@@ -1,10 +1,10 @@
 """
 SignalWire Integration for AI Voice Receptionist.
-SignalWire uses Twilio-compatible APIs, so we reuse the same TwiML format.
+SignalWire uses Twilio-compatible TwiML format, so we use the same TwiML classes.
+No SignalWire SDK needed - webhooks work the same way as Twilio.
 """
 import os
 from typing import Optional
-from signalwire.rest import Client as SignalWireClient
 from twilio.twiml.voice_response import VoiceResponse, Gather
 from datetime import datetime
 
@@ -17,7 +17,7 @@ from voice_handler import get_voice_handler
 
 
 class SignalWireService:
-    """Service for SignalWire voice operations."""
+    """Service for SignalWire voice operations using TwiML format."""
     
     def __init__(self):
         self.project_id = os.getenv("SIGNALWIRE_PROJECT_ID")
@@ -26,14 +26,7 @@ class SignalWireService:
         self.phone_number = os.getenv("SIGNALWIRE_PHONE_NUMBER")
         self.server_url = os.getenv("SERVER_URL", "http://localhost:8000")
         
-        if self.project_id and self.api_token and self.space_url:
-            self.client = SignalWireClient(
-                self.project_id, 
-                self.api_token,
-                signalwire_space_url=self.space_url
-            )
-        else:
-            self.client = None
+        if not self.project_id:
             print("Warning: SignalWire credentials not configured")
     
     def handle_incoming_call(self, call_sid: str, caller_phone: str) -> str:
