@@ -334,10 +334,14 @@ function initChat() {
 }
 
 function initSpeechRecognition() {
+    const voiceStatus = document.getElementById('voice-status');
+    const voiceHint = document.getElementById('voice-hint');
+    
     if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
         recognition.continuous = false;
+        console.log('Speech recognition initialized successfully');
         recognition.interimResults = true;
         recognition.lang = 'en-US';
         
@@ -363,7 +367,7 @@ function initSpeechRecognition() {
             console.error('Speech recognition error:', event.error);
             isListening = false;
             updateMicButton(false);
-            document.getElementById('voice-status').textContent = 'Speech recognition error. Try again.';
+            document.getElementById('voice-status').textContent = 'Speech recognition error: ' + event.error + '. Try again.';
         };
         
         recognition.onend = () => {
@@ -375,13 +379,22 @@ function initSpeechRecognition() {
                 document.getElementById('voice-status').textContent = 'Click microphone to speak';
             }
         };
+        
+        if (voiceHint) {
+            voiceHint.textContent = '💡 Voice enabled! Click 🎤 to speak or type your message';
+        }
     } else {
         console.log('Speech recognition not supported');
         const micBtn = document.getElementById('mic-button');
         if (micBtn) {
             micBtn.style.display = 'none';
         }
-        document.getElementById('voice-hint').textContent = '⚠️ Voice not supported in this browser. Use Chrome for voice features.';
+        if (voiceHint) {
+            voiceHint.innerHTML = '⚠️ <strong>Voice not supported</strong> - Please use <a href="https://www.google.com/chrome/" target="_blank">Chrome</a> or Edge for voice features. You can still type messages!';
+        }
+        if (voiceStatus) {
+            voiceStatus.textContent = 'Voice requires Chrome or Edge browser';
+        }
     }
 }
 
@@ -395,14 +408,20 @@ function updateMicButton(listening) {
 
 function toggleListening() {
     if (!recognition) {
-        alert('Speech recognition is not supported in your browser. Please use Chrome.');
+        alert('Speech recognition is not supported in your browser.\n\nPlease use Chrome or Edge for voice features.\n\nYou can still type messages below!');
         return;
     }
     
-    if (isListening) {
-        recognition.stop();
-    } else {
-        recognition.start();
+    try {
+        if (isListening) {
+            recognition.stop();
+        } else {
+            document.getElementById('voice-status').textContent = '🎤 Starting microphone...';
+            recognition.start();
+        }
+    } catch (error) {
+        console.error('Speech recognition error:', error);
+        document.getElementById('voice-status').textContent = 'Error: ' + error.message;
     }
 }
 
