@@ -92,3 +92,18 @@ def get_server_config() -> dict:
     }
 
 
+def get_signalwire_config() -> dict:
+    """Get SignalWire configuration from environment."""
+    return {
+        "project_id": os.getenv("SIGNALWIRE_PROJECT_ID", ""),
+        "api_token": os.getenv("SIGNALWIRE_API_TOKEN", ""),
+        "space_url": os.getenv("SIGNALWIRE_SPACE_URL", ""),
+        "phone_number": os.getenv("SIGNALWIRE_PHONE_NUMBER", ""),
+    }
+
+
+def get_voice_provider() -> str:
+    """Get which voice provider to use (twilio or signalwire)."""
+    return os.getenv("VOICE_PROVIDER", "signalwire").lower()
+
+

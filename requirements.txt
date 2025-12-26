@@ -12,6 +12,9 @@ httpx>=0.25.0
 # Twilio for Voice Calls
 twilio>=8.10.0
 
+# SignalWire for Voice Calls (Twilio alternative)
+signalwire>=2.0.0
+
 # Environment & Config
 python-dotenv>=1.0.0
 

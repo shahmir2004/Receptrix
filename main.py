@@ -1,6 +1,6 @@
 """
 FastAPI main application for the AI Voice Receptionist system.
-Handles both web chat and Twilio voice calls.
+Handles both web chat and Twilio/SignalWire voice calls.
 """
 from fastapi import FastAPI, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,8 +29,18 @@ from database import (
     get_caller_appointments, get_or_create_caller, update_appointment_status,
     AppointmentStatus
 )
-from config import load_config, get_config, get_server_config
+from config import load_config, get_config, get_server_config, get_voice_provider
 from twilio_service import get_twilio_service
+from signalwire_service import get_signalwire_service
+
+
+def get_voice_service():
+    """Get the appropriate voice service based on configuration."""
+    provider = get_voice_provider()
+    if provider == "signalwire":
+        return get_signalwire_service()
+    else:
+        return get_twilio_service()
 
 
 # Initialize FastAPI app
@@ -86,7 +96,7 @@ async def get_js():
     raise HTTPException(status_code=404, detail="JavaScript file not found")
 
 
-# ============ Voice/Twilio Endpoints ============
+# ============ Voice/Twilio/SignalWire Endpoints ============
 
 @app.post("/voice/incoming")
 async def voice_incoming(
@@ -96,12 +106,12 @@ async def voice_incoming(
     CallStatus: str = Form(None)
 ):
     """
-    Handle incoming voice calls from Twilio.
-    This is the webhook endpoint configured in Twilio.
+    Handle incoming voice calls from Twilio or SignalWire.
+    This is the webhook endpoint configured in your voice provider.
     """
     try:
-        twilio_service = get_twilio_service()
-        twiml = twilio_service.handle_incoming_call(CallSid, From)
+        voice_service = get_voice_service()
+        twiml = voice_service.handle_incoming_call(CallSid, From)
         
         return Response(content=twiml, media_type="application/xml")
     except Exception as e:
@@ -125,19 +135,19 @@ async def voice_respond(
 ):
     """
     Handle speech input from ongoing call.
-    Called by Twilio when caller speaks.
+    Called by Twilio/SignalWire when caller speaks.
     """
     try:
         print(f"Voice respond - CallSid: {CallSid}, From: {From}, Speech: {SpeechResult}")
         
         if not SpeechResult:
             # No speech detected, handle as no input
-            twilio_service = get_twilio_service()
-            twiml = twilio_service.handle_no_input(CallSid, From)
+            voice_service = get_voice_service()
+            twiml = voice_service.handle_no_input(CallSid)
             return Response(content=twiml, media_type="application/xml")
         
-        twilio_service = get_twilio_service()
-        twiml = twilio_service.handle_speech_input(CallSid, From, SpeechResult)
+        voice_service = get_voice_service()
+        twiml = voice_service.handle_speech_input(CallSid, From, SpeechResult)
         
         return Response(content=twiml, media_type="application/xml")
     except Exception as e:
@@ -160,8 +170,8 @@ async def voice_no_input(
 ):
     """Handle when caller doesn't respond."""
     try:
-        twilio_service = get_twilio_service()
-        twiml = twilio_service.handle_no_input(CallSid, From)
+        voice_service = get_voice_service()
+        twiml = voice_service.handle_no_input(CallSid, From)
         return Response(content=twiml, media_type="application/xml")
     except Exception as e:
         print(f"No input error: {e}")
@@ -179,10 +189,10 @@ async def voice_status(
     CallSid: str = Form(...),
     CallStatus: str = Form(...)
 ):
-    """Handle call status updates from Twilio."""
+    """Handle call status updates."""
     try:
-        twilio_service = get_twilio_service()
-        twilio_service.handle_call_status(CallSid, CallStatus)
+        voice_service = get_voice_service()
+        voice_service.handle_call_status(CallSid, CallStatus)
         return {"status": "ok"}
     except Exception as e:
         print(f"Status webhook error: {e}")
