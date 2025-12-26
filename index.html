@@ -166,31 +166,69 @@
                 </div>
             </section>
 
-            <!-- Chat Test Tab -->
+            <!-- Voice Test Tab -->
             <section id="chat" class="tab-content">
                 <div class="page-header">
-                    <h1>Test Chat</h1>
-                    <p>Test the AI receptionist responses</p>
+                    <h1>🎙️ Voice Test</h1>
+                    <p>Test the AI receptionist with your voice (no Twilio needed!)</p>
                 </div>
                 
+                <!-- Voice Mode Toggle -->
+                <div class="card voice-mode-card">
+                    <div class="voice-toggle">
+                        <button id="voice-mode-btn" class="btn-voice-mode" onclick="toggleVoiceMode()">
+                            <span class="voice-icon">🎤</span>
+                            <span>Enable Voice Mode</span>
+                        </button>
+                        <p class="voice-status" id="voice-status">Click to start voice conversation</p>
+                    </div>
+                </div>
+
+                <!-- Call Simulation -->
+                <div class="card call-simulation">
+                    <div class="call-header">
+                        <div class="caller-info">
+                            <span class="caller-avatar">👤</span>
+                            <div>
+                                <strong>Simulated Call</strong>
+                                <span class="call-duration" id="call-duration">00:00</span>
+                            </div>
+                        </div>
+                        <div class="call-controls">
+                            <button id="start-call-btn" class="btn-call-start" onclick="startCall()">
+                                📞 Start Call
+                            </button>
+                            <button id="end-call-btn" class="btn-call-end" onclick="endCall()" style="display:none;">
+                                📵 End Call
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="chat-wrapper">
                     <div class="chat-container" id="chat-container">
                         <div class="message receptionist-message">
+                            <div class="message-avatar">🤖</div>
                             <div class="message-content">
-                                Hello! Welcome to our business. How can I assist you today?
+                                <strong>AI Receptionist</strong>
+                                <p>Click "Start Call" or "Enable Voice Mode" to begin testing. I'll respond using text-to-speech!</p>
                             </div>
                         </div>
                     </div>
                     
                     <div class="input-container">
+                        <button id="mic-button" class="btn-mic" onclick="toggleListening()" title="Hold to speak">
+                            🎤
+                        </button>
                         <input 
                             type="text" 
                             id="message-input" 
-                            placeholder="Type your message..." 
+                            placeholder="Type or click 🎤 to speak..." 
                             autocomplete="off"
                         >
                         <button id="send-button" class="btn-primary">Send</button>
                     </div>
+                    <p class="voice-hint" id="voice-hint">💡 Tip: Click the microphone and speak, or type your message</p>
                 </div>
             </section>
 

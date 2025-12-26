@@ -309,6 +309,15 @@ function closeTranscriptModal() {
 
 // ============ Chat ============
 
+// Voice state
+let isVoiceModeActive = false;
+let isListening = false;
+let isCallActive = false;
+let callStartTime = null;
+let callTimer = null;
+let recognition = null;
+let synthesis = window.speechSynthesis;
+
 function initChat() {
     const sendButton = document.getElementById('send-button');
     const messageInput = document.getElementById('message-input');
@@ -319,6 +328,199 @@ function initChat() {
             if (e.key === 'Enter') sendMessage();
         });
     }
+    
+    // Initialize speech recognition if available
+    initSpeechRecognition();
+}
+
+function initSpeechRecognition() {
+    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        
+        recognition.onstart = () => {
+            isListening = true;
+            updateMicButton(true);
+            document.getElementById('voice-status').textContent = '🎤 Listening...';
+        };
+        
+        recognition.onresult = (event) => {
+            const transcript = Array.from(event.results)
+                .map(result => result[0].transcript)
+                .join('');
+            
+            document.getElementById('message-input').value = transcript;
+            
+            if (event.results[0].isFinal) {
+                sendMessage();
+            }
+        };
+        
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            isListening = false;
+            updateMicButton(false);
+            document.getElementById('voice-status').textContent = 'Speech recognition error. Try again.';
+        };
+        
+        recognition.onend = () => {
+            isListening = false;
+            updateMicButton(false);
+            if (isVoiceModeActive && isCallActive) {
+                document.getElementById('voice-status').textContent = '🔊 AI is speaking...';
+            } else {
+                document.getElementById('voice-status').textContent = 'Click microphone to speak';
+            }
+        };
+    } else {
+        console.log('Speech recognition not supported');
+        const micBtn = document.getElementById('mic-button');
+        if (micBtn) {
+            micBtn.style.display = 'none';
+        }
+        document.getElementById('voice-hint').textContent = '⚠️ Voice not supported in this browser. Use Chrome for voice features.';
+    }
+}
+
+function updateMicButton(listening) {
+    const micBtn = document.getElementById('mic-button');
+    if (micBtn) {
+        micBtn.classList.toggle('listening', listening);
+        micBtn.textContent = listening ? '🔴' : '🎤';
+    }
+}
+
+function toggleListening() {
+    if (!recognition) {
+        alert('Speech recognition is not supported in your browser. Please use Chrome.');
+        return;
+    }
+    
+    if (isListening) {
+        recognition.stop();
+    } else {
+        recognition.start();
+    }
+}
+
+function toggleVoiceMode() {
+    isVoiceModeActive = !isVoiceModeActive;
+    const btn = document.getElementById('voice-mode-btn');
+    const status = document.getElementById('voice-status');
+    
+    if (isVoiceModeActive) {
+        btn.classList.add('active');
+        btn.innerHTML = '<span class="voice-icon">🎤</span><span>Voice Mode Active</span>';
+        status.textContent = 'AI will speak responses. Click "Start Call" to begin!';
+    } else {
+        btn.classList.remove('active');
+        btn.innerHTML = '<span class="voice-icon">🎤</span><span>Enable Voice Mode</span>';
+        status.textContent = 'Click to start voice conversation';
+        synthesis.cancel();
+    }
+}
+
+function startCall() {
+    isCallActive = true;
+    callStartTime = Date.now();
+    
+    document.getElementById('start-call-btn').style.display = 'none';
+    document.getElementById('end-call-btn').style.display = 'inline-block';
+    document.getElementById('voice-status').textContent = '📞 Call in progress...';
+    
+    // Start timer
+    callTimer = setInterval(updateCallDuration, 1000);
+    
+    // Clear previous conversation
+    conversationHistory = [];
+    const container = document.getElementById('chat-container');
+    container.innerHTML = '';
+    
+    // AI greeting
+    const greeting = "Thank you for calling. My name is Sarah, how may I assist you today?";
+    addChatMessage(greeting, false, 'AI Receptionist');
+    speakText(greeting);
+    
+    // Auto-enable voice mode
+    if (!isVoiceModeActive) {
+        toggleVoiceMode();
+    }
+}
+
+function endCall() {
+    isCallActive = false;
+    
+    document.getElementById('start-call-btn').style.display = 'inline-block';
+    document.getElementById('end-call-btn').style.display = 'none';
+    document.getElementById('voice-status').textContent = 'Call ended. Click "Start Call" to begin a new call.';
+    
+    if (callTimer) {
+        clearInterval(callTimer);
+        callTimer = null;
+    }
+    
+    synthesis.cancel();
+    if (isListening && recognition) {
+        recognition.stop();
+    }
+    
+    // Goodbye message
+    addChatMessage("Thank you for calling. Have a great day!", false, 'AI Receptionist');
+}
+
+function updateCallDuration() {
+    if (!callStartTime) return;
+    
+    const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+    const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+    const secs = (elapsed % 60).toString().padStart(2, '0');
+    
+    document.getElementById('call-duration').textContent = `${mins}:${secs}`;
+}
+
+function speakText(text) {
+    if (!synthesis) return;
+    
+    synthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.95;
+    utterance.pitch = 1.1;
+    utterance.volume = 1;
+    
+    // Try to find a good voice
+    const voices = synthesis.getVoices();
+    const preferredVoice = voices.find(v => 
+        v.name.includes('Female') || 
+        v.name.includes('Samantha') || 
+        v.name.includes('Google UK English Female') ||
+        v.name.includes('Microsoft Zira')
+    ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+    
+    if (preferredVoice) {
+        utterance.voice = preferredVoice;
+    }
+    
+    utterance.onstart = () => {
+        document.getElementById('voice-status').textContent = '🔊 AI is speaking...';
+    };
+    
+    utterance.onend = () => {
+        if (isCallActive && isVoiceModeActive) {
+            document.getElementById('voice-status').textContent = '🎤 Your turn to speak...';
+            // Auto-start listening after AI speaks
+            setTimeout(() => {
+                if (isCallActive && recognition && !isListening) {
+                    recognition.start();
+                }
+            }, 500);
+        }
+    };
+    
+    synthesis.speak(utterance);
 }
 
 async function sendMessage() {
@@ -328,7 +530,7 @@ async function sendMessage() {
     if (!message) return;
     
     // Add user message
-    addChatMessage(message, true);
+    addChatMessage(message, true, 'You');
     input.value = '';
     
     // Add to conversation history
@@ -346,28 +548,45 @@ async function sendMessage() {
         
         const data = await response.json();
         
-        addChatMessage(data.message, false);
+        addChatMessage(data.message, false, 'AI Receptionist');
         conversationHistory.push({ role: 'assistant', content: data.message });
+        
+        // Speak the response if voice mode is active
+        if (isVoiceModeActive) {
+            speakText(data.message);
+        }
         
     } catch (error) {
         console.error('Error sending message:', error);
-        addChatMessage('Sorry, I encountered an error. Please try again.', false);
+        addChatMessage('Sorry, I encountered an error. Please try again.', false, 'AI Receptionist');
     }
 }
 
-function addChatMessage(content, isUser) {
+function addChatMessage(content, isUser, senderName = '') {
     const container = document.getElementById('chat-container');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isUser ? 'user-message' : 'receptionist-message'}`;
     
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    avatar.textContent = isUser ? '👤' : '🤖';
+    
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    contentDiv.textContent = content;
+    contentDiv.innerHTML = `<strong>${senderName}</strong><p>${content}</p>`;
     
+    messageDiv.appendChild(avatar);
     messageDiv.appendChild(contentDiv);
     container.appendChild(messageDiv);
     
     container.scrollTop = container.scrollHeight;
+}
+
+// Load voices when available
+if (synthesis) {
+    synthesis.onvoiceschanged = () => {
+        synthesis.getVoices();
+    };
 }
 
 // ============ Settings ============
