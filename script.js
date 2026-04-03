@@ -14,9 +14,24 @@ let config = null;
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initChat();
+    // Dashboard data is loaded when user clicks "Open Dashboard" via showDashboard()
+});
+
+// ============ Landing / Dashboard Toggle ============
+
+function showDashboard() {
+    document.getElementById('landing').classList.add('hidden');
+    document.querySelector('.app-container').classList.remove('hidden');
     loadDashboardData();
     loadConfig();
-});
+    window.scrollTo(0, 0);
+}
+
+function showLanding() {
+    document.getElementById('landing').classList.remove('hidden');
+    document.querySelector('.app-container').classList.add('hidden');
+    window.scrollTo(0, 0);
+}
 
 // ============ Navigation ============
 
@@ -340,7 +355,7 @@ function initSpeechRecognition() {
     if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
-        recognition.continuous = false;
+        recognition.continuous = true;
         console.log('Speech recognition initialized successfully');
         recognition.interimResults = true;
         recognition.lang = 'en-US';
@@ -352,29 +367,39 @@ function initSpeechRecognition() {
         };
         
         recognition.onresult = (event) => {
-            const transcript = Array.from(event.results)
-                .map(result => result[0].transcript)
-                .join('');
-            
-            document.getElementById('message-input').value = transcript;
-            
-            if (event.results[0].isFinal) {
+            // Only look at the latest result
+            const lastResult = event.results[event.results.length - 1];
+            const transcript = lastResult[0].transcript.trim();
+
+            if (transcript) {
+                document.getElementById('message-input').value = transcript;
+            }
+
+            if (lastResult.isFinal && transcript) {
                 sendMessage();
             }
         };
         
         recognition.onerror = (event) => {
-            console.error('Speech recognition error:', event.error);
+            console.error('Speech recognition error:', event.error, event);
             isListening = false;
             updateMicButton(false);
-            document.getElementById('voice-status').textContent = 'Speech recognition error: ' + event.error + '. Try again.';
+            if (event.error === 'not-allowed') {
+                document.getElementById('voice-status').textContent = 'Microphone blocked — click the lock icon in the address bar and allow microphone access, then reload.';
+            } else if (event.error === 'no-speech') {
+                document.getElementById('voice-status').textContent = 'No speech detected. Click 🎤 and try again.';
+            } else if (event.error === 'network') {
+                document.getElementById('voice-status').textContent = 'Network error — speech recognition requires internet (Chrome sends audio to Google servers).';
+            } else {
+                document.getElementById('voice-status').textContent = 'Speech error: ' + event.error + '. Try again.';
+            }
         };
         
         recognition.onend = () => {
             isListening = false;
             updateMicButton(false);
             if (isVoiceModeActive && isCallActive) {
-                document.getElementById('voice-status').textContent = '🔊 AI is speaking...';
+                document.getElementById('voice-status').textContent = '🎤 Click microphone to continue speaking';
             } else {
                 document.getElementById('voice-status').textContent = 'Click microphone to speak';
             }
@@ -406,18 +431,37 @@ function updateMicButton(listening) {
     }
 }
 
-function toggleListening() {
+async function toggleListening() {
     if (!recognition) {
         alert('Speech recognition is not supported in your browser.\n\nPlease use Chrome or Edge for voice features.\n\nYou can still type messages below!');
         return;
     }
-    
+
     try {
         if (isListening) {
             recognition.stop();
+            // Stop audio monitoring
+            if (window._micStream) {
+                window._micStream.getTracks().forEach(t => t.stop());
+                window._micStream = null;
+            }
         } else {
             document.getElementById('voice-status').textContent = '🎤 Starting microphone...';
-            recognition.start();
+            // Request mic permission before starting recognition
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(t => t.stop());
+            } catch (micErr) {
+                document.getElementById('voice-status').textContent = 'Microphone access denied. Please allow microphone in browser settings.';
+                return;
+            }
+
+            try {
+                recognition.start();
+            } catch (e) {
+                recognition.abort();
+                setTimeout(() => recognition.start(), 200);
+            }
         }
     } catch (error) {
         console.error('Speech recognition error:', error);
@@ -529,11 +573,16 @@ function speakText(text) {
     
     utterance.onend = () => {
         if (isCallActive && isVoiceModeActive) {
-            document.getElementById('voice-status').textContent = '🎤 Your turn to speak...';
+            document.getElementById('voice-status').textContent = '🎤 Your turn to speak... (click 🎤)';
             // Auto-start listening after AI speaks
             setTimeout(() => {
                 if (isCallActive && recognition && !isListening) {
-                    recognition.start();
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        console.warn('Auto-restart blocked, user must click mic:', e);
+                        document.getElementById('voice-status').textContent = '🎤 Click microphone to continue speaking';
+                    }
                 }
             }, 500);
         }

@@ -5,18 +5,85 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#6366f1">
-    <title>AI Voice Receptionist - Dashboard</title>
-    <link rel="stylesheet" href="style.css?v=3">
+    <meta name="theme-color" content="#0a0a0f">
+    <title>Receptrix — AI Voice Receptionist</title>
+    <link rel="stylesheet" href="style.css?v=4">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="app-container">
+
+    <!-- Landing Page -->
+    <section id="landing" class="landing">
+        <nav class="landing-nav">
+            <div class="landing-logo">Receptrix</div>
+            <button class="btn-cta-small" onclick="showDashboard()">Go to Dashboard</button>
+        </nav>
+
+        <div class="hero">
+            <div class="hero-content">
+                <div class="hero-tag">AI-Powered Receptionist</div>
+                <h1 class="hero-title">Your AI Receptionist,<br><span class="gradient-text">Always On Duty</span></h1>
+                <p class="hero-subtitle">Handle calls, book appointments, and delight clients — 24/7, powered by AI voice intelligence.</p>
+                <div class="hero-buttons">
+                    <button class="btn-cta" onclick="showDashboard()">Open Dashboard</button>
+                    <a href="#features" class="btn-ghost">See Features</a>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="hero-phone-mockup">
+                    <div class="ring ring-1"></div>
+                    <div class="ring ring-2"></div>
+                    <div class="ring ring-3"></div>
+                    <div class="phone-icon">📞</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="features" class="features-section">
+            <h2 class="section-title">Why Receptrix?</h2>
+            <p class="section-subtitle">Everything your front desk needs, automated and intelligent.</p>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>AI-Powered Conversations</h3>
+                    <p>Natural language understanding handles complex queries just like a human receptionist.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📅</div>
+                    <h3>Smart Scheduling</h3>
+                    <p>Automatic appointment booking with real-time availability and conflict detection.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📞</div>
+                    <h3>Voice Call Handling</h3>
+                    <p>Twilio and SignalWire integration for real phone call management and routing.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Analytics Dashboard</h3>
+                    <p>Track calls, appointments, and performance metrics from a single dashboard.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cta-section">
+            <h2>Ready to automate your front desk?</h2>
+            <button class="btn-cta" onclick="showDashboard()">Get Started Now</button>
+        </div>
+
+        <div class="landing-footer">
+            <p>Receptrix — AI Voice Receptionist</p>
+        </div>
+    </section>
+
+    <!-- App Dashboard (hidden by default) -->
+    <div class="app-container hidden">
         <!-- Sidebar Navigation -->
         <nav class="sidebar">
             <div class="sidebar-header">
                 <h2>📞 Receptrix</h2>
                 <p class="subtitle">AI Voice Receptionist</p>
+                <button class="sidebar-back" onclick="showLanding()">← Back to Home</button>
             </div>
             <ul class="nav-menu">
                 <li class="nav-item active" data-tab="dashboard">
@@ -50,7 +117,7 @@
                     <h1>Dashboard</h1>
                     <p>Overview of your AI receptionist activity</p>
                 </div>
-                
+
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-icon">📅</div>
@@ -104,7 +171,7 @@
                     <h1>Appointments</h1>
                     <button class="btn-primary" onclick="showNewAppointmentModal()">+ New Appointment</button>
                 </div>
-                
+
                 <div class="filters">
                     <input type="date" id="filter-date" onchange="filterAppointments()">
                     <select id="filter-status" onchange="filterAppointments()">
@@ -172,7 +239,7 @@
                     <h1>🎙️ Voice Test</h1>
                     <p>Test the AI receptionist with your voice (no Twilio needed!)</p>
                 </div>
-                
+
                 <!-- Voice Mode Toggle -->
                 <div class="card voice-mode-card">
                     <div class="voice-toggle">
@@ -215,15 +282,15 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="input-container">
                         <button id="mic-button" class="btn-mic" onclick="toggleListening()" title="Hold to speak">
                             🎤
                         </button>
-                        <input 
-                            type="text" 
-                            id="message-input" 
-                            placeholder="Type or click 🎤 to speak..." 
+                        <input
+                            type="text"
+                            id="message-input"
+                            placeholder="Type or click 🎤 to speak..."
                             autocomplete="off"
                         >
                         <button id="send-button" class="btn-primary">Send</button>
@@ -249,7 +316,7 @@
                             <p><strong>Address:</strong> <span id="config-address">Loading...</span></p>
                         </div>
                     </div>
-                    
+
                     <div class="card">
                         <h3>Working Hours</h3>
                         <div id="working-hours">
@@ -333,8 +400,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=3"></script>
+    <script src="script.js?v=4"></script>
 </body>
 </html>
-
-
