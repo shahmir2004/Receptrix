@@ -266,6 +266,44 @@ def _ensure_profile_exists(user_id: str) -> None:
         raise _http_error(400, "PROFILE_CREATE_FAILED", "Unable to initialize profile for this account.") from exc
 
 
+def _try_auto_link_user_to_business(user_id: str, email: str) -> list[dict[str, Any]]:
+    """Best-effort legacy recovery: link user to a matching business email when unambiguous."""
+    try:
+        normalized_email = normalize_email(email)
+    except HTTPException:
+        return []
+
+    existing = _list_memberships(user_id)
+    if existing:
+        return existing
+
+    sb = get_supabase()
+    business_lookup = sb.table("businesses").select("id, name, email").ilike(
+        "email", normalized_email
+    ).limit(2).execute()
+
+    matches = business_lookup.data or []
+    if len(matches) != 1:
+        return []
+
+    business_id = matches[0].get("id")
+    if not business_id:
+        return []
+
+    try:
+        sb.table("business_memberships").insert({
+            "user_id": user_id,
+            "business_id": business_id,
+            "role": "owner",
+        }).execute()
+    except Exception as exc:
+        msg = _extract_error_message(exc).lower()
+        if "duplicate" not in msg and "unique" not in msg:
+            return []
+
+    return _list_memberships(user_id)
+
+
 # ============ JWT / Current User ============
 
 def get_current_user_id(request: Request) -> Optional[str]:
@@ -386,12 +424,18 @@ def sign_in(email: str, password: str) -> dict[str, Any]:
     if not result.user or not result.session:
         raise _http_error(401, "INVALID_CREDENTIALS", "Invalid email or password.")
 
-    memberships = _list_memberships(str(result.user.id))
+    user_id = str(result.user.id)
+    _ensure_profile_exists(user_id)
+
+    memberships = _list_memberships(user_id)
+    if not memberships:
+        memberships = _try_auto_link_user_to_business(user_id, result.user.email or normalized_email)
+
     current_business_id = memberships[0]["business_id"] if memberships else None
 
     metadata = getattr(result.user, "user_metadata", {}) or {}
     return {
-        "user_id": str(result.user.id),
+        "user_id": user_id,
         "email": result.user.email,
         "full_name": metadata.get("full_name", ""),
         "access_token": result.session.access_token,
@@ -534,7 +578,15 @@ def get_user_profile(user_id: str) -> dict[str, Any]:
     profile_result = sb.table("profiles").select("*").eq("id", user_id).limit(1).execute()
     profile = profile_result.data[0] if profile_result.data else None
 
+    if not profile:
+        _ensure_profile_exists(user_id)
+        profile_result = sb.table("profiles").select("*").eq("id", user_id).limit(1).execute()
+        profile = profile_result.data[0] if profile_result.data else None
+
     businesses = _list_memberships(user_id)
+    if not businesses and profile and profile.get("email"):
+        businesses = _try_auto_link_user_to_business(user_id, profile["email"])
+
     return {
         "user_id": user_id,
         "profile": profile,
