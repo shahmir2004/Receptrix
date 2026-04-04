@@ -238,6 +238,24 @@ function applyMePayload(payload) {
     applySessionContext(user, businesses, selectedBusinessId);
 }
 
+async function ensureActiveBusinessContext() {
+    if (currentBusinessId) {
+        return true;
+    }
+
+    try {
+        const meData = await authedRequest('/auth/me', { method: 'GET' });
+        if (meData.success) {
+            applyMePayload(meData);
+            return Boolean(currentBusinessId);
+        }
+    } catch (error) {
+        console.warn('Unable to resolve business context from profile.', error);
+    }
+
+    return false;
+}
+
 function renderUserStatus() {
     const nameEl = document.getElementById('user-status-name');
     const emailEl = document.getElementById('user-status-email');
@@ -290,8 +308,17 @@ async function handleSignIn(event) {
         const data = await readResponsePayload(response);
         if (response.ok && data.success) {
             applyAuthPayload(data);
-            showToast('Signed in successfully!', 'success');
-            showDashboard();
+
+            const hasBusiness = await ensureActiveBusinessContext();
+            if (!hasBusiness) {
+                showToast('Signed in, but no business access is linked to this account.', 'error');
+                return;
+            }
+
+            const opened = await showDashboard();
+            if (opened) {
+                showToast('Signed in successfully!', 'success');
+            }
         } else {
             document.getElementById('signin-password').value = '';
             showToast(getErrorMessage(data, 'Sign in failed'), 'error');
@@ -419,16 +446,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ============ Landing / Dashboard / Auth Toggle ============
 
-function showDashboard() {
+async function showDashboard() {
     if (!isAuthenticated) {
         showAuth();
         showToast('Please sign in to access the dashboard.', 'info');
-        return;
+        return false;
     }
-    if (!currentBusinessId) {
+
+    const hasBusiness = await ensureActiveBusinessContext();
+    if (!hasBusiness) {
         showAuth();
         showToast('No business found for this account. Contact support.', 'error');
-        return;
+        return false;
     }
 
     document.getElementById('landing').classList.add('hidden');
@@ -437,6 +466,7 @@ function showDashboard() {
     loadDashboardData();
     loadConfig();
     window.scrollTo(0, 0);
+    return true;
 }
 
 function showLanding() {
