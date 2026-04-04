@@ -10,7 +10,9 @@ let conversationHistory = [];
 let services = [];
 let config = null;
 let currentBusinessId = localStorage.getItem('businessId') || null;
-let authToken = localStorage.getItem('authToken') || null;
+let currentUser = null;
+let businessMemberships = [];
+let isAuthenticated = false;
 
 // ============ Theme System ============
 
@@ -111,8 +113,16 @@ function animateCounter(element, target) {
 function apiHeaders(extra = {}) {
     const headers = { 'Content-Type': 'application/json', ...extra };
     if (currentBusinessId) headers['X-Business-Id'] = currentBusinessId;
-    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    const csrfToken = getCookieValue('rx_csrf_token');
+    if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
     return headers;
+}
+
+function getCookieValue(name) {
+    const cookie = document.cookie
+        .split('; ')
+        .find((row) => row.startsWith(`${name}=`));
+    return cookie ? decodeURIComponent(cookie.split('=')[1]) : '';
 }
 
 async function readResponsePayload(response) {
@@ -131,17 +141,122 @@ async function readResponsePayload(response) {
     }
 }
 
-function setBusinessContext(businessId, token) {
+function setBusinessContext(businessId) {
     currentBusinessId = businessId;
-    authToken = token;
     if (businessId) localStorage.setItem('businessId', businessId);
     else localStorage.removeItem('businessId');
-    if (token) localStorage.setItem('authToken', token);
-    else localStorage.removeItem('authToken');
 }
 
 function clearAuth() {
-    setBusinessContext(null, null);
+    isAuthenticated = false;
+    currentUser = null;
+    businessMemberships = [];
+    setBusinessContext(null);
+    renderUserStatus();
+}
+
+function getErrorMessage(payload, fallback = 'Request failed') {
+    if (!payload) return fallback;
+    if (typeof payload.detail === 'string') return payload.detail;
+    if (payload.detail && typeof payload.detail.message === 'string') return payload.detail.message;
+    if (typeof payload.message === 'string') return payload.message;
+    return fallback;
+}
+
+function handleUnauthorizedResponse(response) {
+    if (response.status !== 401) return false;
+    clearAuth();
+    showAuth();
+    showToast('Session expired. Please sign in again.', 'info');
+    return true;
+}
+
+async function authedRequest(path, options = {}) {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+        credentials: 'include',
+        ...options,
+        headers: apiHeaders(options.headers || {})
+    });
+
+    const payload = await readResponsePayload(response);
+    if (handleUnauthorizedResponse(response)) {
+        throw new Error('Unauthorized');
+    }
+    if (!response.ok) {
+        throw new Error(getErrorMessage(payload, 'Request failed'));
+    }
+
+    return payload;
+}
+
+function setButtonLoading(button, loading, defaultLabel) {
+    if (!button) return;
+    if (loading) {
+        button.disabled = true;
+        button.dataset.originalLabel = button.textContent.trim();
+        button.textContent = 'Please wait...';
+    } else {
+        button.disabled = false;
+        button.textContent = button.dataset.originalLabel || defaultLabel;
+    }
+}
+
+function chooseBusinessId(payloadBusinesses, payloadCurrentBusinessId) {
+    if (currentBusinessId && payloadBusinesses.some((biz) => biz.business_id === currentBusinessId)) {
+        return currentBusinessId;
+    }
+    if (payloadCurrentBusinessId) return payloadCurrentBusinessId;
+    return payloadBusinesses[0]?.business_id || null;
+}
+
+function applySessionContext(user, businesses = [], payloadCurrentBusinessId = null) {
+    currentUser = user || null;
+    businessMemberships = Array.isArray(businesses) ? businesses : [];
+    isAuthenticated = Boolean(currentUser && currentUser.user_id);
+
+    const selectedBusinessId = chooseBusinessId(businessMemberships, payloadCurrentBusinessId);
+    setBusinessContext(selectedBusinessId);
+    renderUserStatus();
+}
+
+function applyAuthPayload(payload) {
+    const user = payload?.user || null;
+    const businesses = payload?.businesses || [];
+    const selectedBusinessId = payload?.current_business_id || null;
+    applySessionContext(user, businesses, selectedBusinessId);
+}
+
+function applyMePayload(payload) {
+    const profile = payload?.profile || {};
+    const user = {
+        user_id: payload?.user_id || null,
+        email: profile?.email || '',
+        full_name: profile?.full_name || '',
+    };
+    const businesses = payload?.businesses || [];
+    const selectedBusinessId = payload?.current_business_id || null;
+    applySessionContext(user, businesses, selectedBusinessId);
+}
+
+function renderUserStatus() {
+    const nameEl = document.getElementById('user-status-name');
+    const emailEl = document.getElementById('user-status-email');
+    const businessEl = document.getElementById('user-status-business');
+    if (!nameEl || !emailEl || !businessEl) return;
+
+    if (!isAuthenticated || !currentUser) {
+        nameEl.textContent = 'Not signed in';
+        emailEl.textContent = '-';
+        businessEl.textContent = 'No business selected';
+        return;
+    }
+
+    const activeBusiness = businessMemberships.find((biz) => biz.business_id === currentBusinessId) || businessMemberships[0] || null;
+    nameEl.textContent = currentUser.full_name || 'User';
+    emailEl.textContent = currentUser.email || '-';
+    businessEl.textContent = activeBusiness
+        ? `${activeBusiness.business_name || 'Business'} (${activeBusiness.role})`
+        : 'No business assigned';
 }
 
 // ============ Auth ============
@@ -160,52 +275,114 @@ function showAuthForm(form) {
 
 async function handleSignIn(event) {
     event.preventDefault();
+    const button = event.target.querySelector('button[type="submit"]');
     const email = document.getElementById('signin-email').value;
     const password = document.getElementById('signin-password').value;
+    setButtonLoading(button, true, 'Sign In');
 
     try {
         const response = await fetch(`${API_BASE_URL}/auth/signin`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ email, password })
         });
         const data = await readResponsePayload(response);
-        if (response.ok && data.access_token) {
-            setBusinessContext(data.business_id || null, data.access_token);
+        if (response.ok && data.success) {
+            applyAuthPayload(data);
             showToast('Signed in successfully!', 'success');
             showDashboard();
         } else {
-            showToast(data.detail || 'Sign in failed', 'error');
+            document.getElementById('signin-password').value = '';
+            showToast(getErrorMessage(data, 'Sign in failed'), 'error');
         }
     } catch (error) {
         console.error('Sign in error:', error);
         showToast('Connection error. Please try again.', 'error');
+    } finally {
+        setButtonLoading(button, false, 'Sign In');
     }
 }
 
 async function handleSignUp(event) {
     event.preventDefault();
+    const button = event.target.querySelector('button[type="submit"]');
     const name = document.getElementById('signup-name').value;
+    const businessName = document.getElementById('signup-business').value;
     const email = document.getElementById('signup-email').value;
     const password = document.getElementById('signup-password').value;
+
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password)) {
+        showToast('Password must be 8+ chars with uppercase, lowercase, and a number.', 'error');
+        return;
+    }
+
+    setButtonLoading(button, true, 'Create Account');
 
     try {
         const response = await fetch(`${API_BASE_URL}/auth/signup`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, full_name: name })
+            credentials: 'include',
+            body: JSON.stringify({ email, password, full_name: name, business_name: businessName })
         });
         const data = await readResponsePayload(response);
-        if (response.ok && data.access_token) {
-            setBusinessContext(data.business_id || null, data.access_token);
-            showToast('Account created! Welcome to Receptrix.', 'success');
-            showDashboard();
+        if (response.ok && data.success) {
+            if (data.needs_email_verification) {
+                clearAuth();
+                showToast('Please verify your email, then sign in.', 'info');
+                showAuthForm('signin');
+            } else {
+                applyAuthPayload(data);
+                showToast('Account created! Welcome to Receptrix.', 'success');
+                showDashboard();
+            }
         } else {
-            showToast(data.detail || 'Sign up failed', 'error');
+            showToast(getErrorMessage(data, 'Sign up failed'), 'error');
         }
     } catch (error) {
         console.error('Sign up error:', error);
         showToast('Connection error. Please try again.', 'error');
+    } finally {
+        setButtonLoading(button, false, 'Create Account');
+    }
+}
+
+async function initializeSession() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/me`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await readResponsePayload(response);
+        if (response.ok && data.success) {
+            applyMePayload(data);
+            showDashboard();
+            return;
+        }
+    } catch (error) {
+        console.warn('No active session found.', error);
+    }
+
+    clearAuth();
+    showLanding();
+}
+
+async function handleLogout() {
+    try {
+        await fetch(`${API_BASE_URL}/auth/logout`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: apiHeaders()
+        });
+    } catch (error) {
+        console.error('Logout error:', error);
+    } finally {
+        clearAuth();
+        showLanding();
+        showToast('You have been logged out.', 'info');
     }
 }
 
@@ -235,11 +412,24 @@ document.addEventListener('DOMContentLoaded', () => {
         card.style.opacity = '0';
         observer.observe(card);
     });
+
+    initializeSession();
 });
 
 // ============ Landing / Dashboard / Auth Toggle ============
 
 function showDashboard() {
+    if (!isAuthenticated) {
+        showAuth();
+        showToast('Please sign in to access the dashboard.', 'info');
+        return;
+    }
+    if (!currentBusinessId) {
+        showAuth();
+        showToast('No business found for this account. Contact support.', 'error');
+        return;
+    }
+
     document.getElementById('landing').classList.add('hidden');
     document.getElementById('auth-page').classList.add('hidden');
     document.querySelector('.app-container').classList.remove('hidden');
@@ -283,8 +473,13 @@ function initNavigation() {
 
 async function loadDashboardData() {
     try {
-        const statsResponse = await fetch(`${API_BASE_URL}/stats`, { headers: apiHeaders() });
-        const stats = await statsResponse.json();
+        const statsResponse = await fetch(`${API_BASE_URL}/stats`, {
+            headers: apiHeaders(),
+            credentials: 'include'
+        });
+        if (handleUnauthorizedResponse(statsResponse)) return;
+        const stats = await readResponsePayload(statsResponse);
+        if (!statsResponse.ok) throw new Error(getErrorMessage(stats, 'Failed to load dashboard stats'));
 
         // Animate counters
         animateCounter(document.getElementById('total-appointments'), stats.total_appointments);
@@ -294,13 +489,23 @@ async function loadDashboardData() {
 
         // Load today's schedule
         const today = new Date().toISOString().split('T')[0];
-        const appointmentsResponse = await fetch(`${API_BASE_URL}/appointments?date=${today}`, { headers: apiHeaders() });
-        const appointmentsData = await appointmentsResponse.json();
+        const appointmentsResponse = await fetch(`${API_BASE_URL}/appointments?date=${today}`, {
+            headers: apiHeaders(),
+            credentials: 'include'
+        });
+        if (handleUnauthorizedResponse(appointmentsResponse)) return;
+        const appointmentsData = await readResponsePayload(appointmentsResponse);
+        if (!appointmentsResponse.ok) throw new Error(getErrorMessage(appointmentsData, 'Failed to load appointments'));
         renderTodaysSchedule(appointmentsData.appointments);
 
         // Load recent calls
-        const callsResponse = await fetch(`${API_BASE_URL}/calls?limit=5`, { headers: apiHeaders() });
-        const callsData = await callsResponse.json();
+        const callsResponse = await fetch(`${API_BASE_URL}/calls?limit=5`, {
+            headers: apiHeaders(),
+            credentials: 'include'
+        });
+        if (handleUnauthorizedResponse(callsResponse)) return;
+        const callsData = await readResponsePayload(callsResponse);
+        if (!callsResponse.ok) throw new Error(getErrorMessage(callsData, 'Failed to load calls'));
         renderRecentCalls(callsData.calls);
 
     } catch (error) {
@@ -351,8 +556,13 @@ function renderRecentCalls(calls) {
 
 async function loadAppointments() {
     try {
-        const response = await fetch(`${API_BASE_URL}/appointments`, { headers: apiHeaders() });
-        const data = await response.json();
+        const response = await fetch(`${API_BASE_URL}/appointments`, {
+            headers: apiHeaders(),
+            credentials: 'include'
+        });
+        if (handleUnauthorizedResponse(response)) return;
+        const data = await readResponsePayload(response);
+        if (!response.ok) throw new Error(getErrorMessage(data, 'Failed to load appointments'));
         renderAppointmentsTable(data.appointments);
     } catch (error) {
         console.error('Error loading appointments:', error);
@@ -385,10 +595,16 @@ function renderAppointmentsTable(appointments) {
 
 async function updateAppointmentStatus(id, status) {
     try {
-        await fetch(`${API_BASE_URL}/appointments/${id}/status?status=${status}`, {
+        const response = await fetch(`${API_BASE_URL}/appointments/${id}/status?status=${status}`, {
             method: 'PATCH',
-            headers: apiHeaders()
+            headers: apiHeaders(),
+            credentials: 'include'
         });
+        if (handleUnauthorizedResponse(response)) return;
+        const payload = await readResponsePayload(response);
+        if (!response.ok) {
+            throw new Error(getErrorMessage(payload, 'Failed to update appointment'));
+        }
         showToast(`Appointment ${status}`, status === 'confirmed' ? 'success' : 'info');
         loadAppointments();
         loadDashboardData();
@@ -419,8 +635,13 @@ function closeModal() {
 
 async function loadServicesForModal() {
     try {
-        const response = await fetch(`${API_BASE_URL}/services`, { headers: apiHeaders() });
-        const data = await response.json();
+        const response = await fetch(`${API_BASE_URL}/services`, {
+            headers: apiHeaders(),
+            credentials: 'include'
+        });
+        if (handleUnauthorizedResponse(response)) return;
+        const data = await readResponsePayload(response);
+        if (!response.ok) throw new Error(getErrorMessage(data, 'Failed to load services'));
         services = data.services;
 
         const select = document.getElementById('apt-service');
@@ -438,8 +659,13 @@ document.getElementById('apt-date')?.addEventListener('change', async (e) => {
     if (!date) return;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/appointments/availability?date=${date}&service=${service || ''}`, { headers: apiHeaders() });
-        const data = await response.json();
+        const response = await fetch(`${API_BASE_URL}/appointments/availability?date=${date}&service=${service || ''}`, {
+            headers: apiHeaders(),
+            credentials: 'include'
+        });
+        if (handleUnauthorizedResponse(response)) return;
+        const data = await readResponsePayload(response);
+        if (!response.ok) throw new Error(getErrorMessage(data, 'Failed to load availability'));
 
         const timeSelect = document.getElementById('apt-time');
 
@@ -471,18 +697,20 @@ async function createAppointment(event) {
         const response = await fetch(`${API_BASE_URL}/appointments`, {
             method: 'POST',
             headers: apiHeaders(),
+            credentials: 'include',
             body: JSON.stringify(data)
         });
 
-        const result = await response.json();
+        if (handleUnauthorizedResponse(response)) return;
+        const result = await readResponsePayload(response);
 
-        if (result.success) {
+        if (response.ok && result.success) {
             showToast('Appointment created successfully!', 'success');
             closeModal();
             loadAppointments();
             loadDashboardData();
         } else {
-            showToast('Failed: ' + result.message, 'error');
+            showToast(getErrorMessage(result, 'Failed to create appointment'), 'error');
         }
     } catch (error) {
         console.error('Error creating appointment:', error);
@@ -494,8 +722,13 @@ async function createAppointment(event) {
 
 async function loadCallLogs() {
     try {
-        const response = await fetch(`${API_BASE_URL}/calls`, { headers: apiHeaders() });
-        const data = await response.json();
+        const response = await fetch(`${API_BASE_URL}/calls`, {
+            headers: apiHeaders(),
+            credentials: 'include'
+        });
+        if (handleUnauthorizedResponse(response)) return;
+        const data = await readResponsePayload(response);
+        if (!response.ok) throw new Error(getErrorMessage(data, 'Failed to load calls'));
         renderCallsTable(data.calls);
     } catch (error) {
         console.error('Error loading calls:', error);
@@ -792,6 +1025,7 @@ async function sendMessage() {
         const response = await fetch(`${API_BASE_URL}/chat`, {
             method: 'POST',
             headers: apiHeaders(),
+            credentials: 'include',
             body: JSON.stringify({
                 message: message,
                 conversation_history: conversationHistory
@@ -800,8 +1034,9 @@ async function sendMessage() {
 
         const data = await readResponsePayload(response);
 
+        if (handleUnauthorizedResponse(response)) return;
         if (!response.ok) {
-            throw new Error(data.detail || data.message || `Request failed with status ${response.status}`);
+            throw new Error(getErrorMessage(data, `Request failed with status ${response.status}`));
         }
 
         addChatMessage(data.message, false, 'AI Receptionist');
@@ -846,27 +1081,259 @@ if (synthesis) {
 // ============ Settings ============
 
 async function loadConfig() {
+    if (!isAuthenticated || !currentBusinessId) return;
+
     try {
-        const response = await fetch(`${API_BASE_URL}/config`, { headers: apiHeaders() });
-        config = await response.json();
+        const meData = await authedRequest('/auth/me', { method: 'GET' });
+        if (meData.success) {
+            applyMePayload(meData);
+        }
 
-        document.getElementById('config-name').textContent = config.business_name;
-        document.getElementById('config-phone').textContent = config.contact_info.phone;
-        document.getElementById('config-email').textContent = config.contact_info.email;
-        document.getElementById('config-address').textContent = config.contact_info.address;
+        const businessSettings = await authedRequest('/business/settings', { method: 'GET' });
+        const serviceData = await authedRequest('/business/services', { method: 'GET' });
 
-        const hoursHtml = Object.entries(config.working_hours)
-            .map(([day, hours]) => `<p><strong>${capitalize(day)}:</strong> ${hours}</p>`)
-            .join('');
-        document.getElementById('working-hours').innerHTML = hoursHtml;
-
-        const servicesHtml = config.services
-            .map(s => `<p><strong>${s.name}:</strong> Rs.${s.price} (${s.duration} min)</p>`)
-            .join('');
-        document.getElementById('services-list').innerHTML = servicesHtml;
-
+        config = businessSettings;
+        services = (serviceData.services || []).filter((service) => service.is_active !== false);
+        fillSettingsForms();
     } catch (error) {
+        if (error.message !== 'Unauthorized') {
+            showToast(error.message || 'Failed to load settings', 'error');
+        }
         console.error('Error loading config:', error);
+    }
+}
+
+function fillSettingsForms() {
+    document.getElementById('profile-full-name').value = currentUser?.full_name || '';
+    document.getElementById('profile-email').value = currentUser?.email || '';
+
+    document.getElementById('business-name').value = config?.name || '';
+    document.getElementById('business-phone').value = config?.phone || '';
+    document.getElementById('business-email').value = config?.email || '';
+    document.getElementById('business-address').value = config?.address || '';
+    document.getElementById('business-timezone').value = config?.timezone || 'Asia/Karachi';
+    document.getElementById('business-greeting').value = config?.greeting_message || '';
+
+    const workingHours = config?.working_hours || {};
+    ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach((day) => {
+        const field = document.getElementById(`hours-${day}`);
+        if (field) {
+            field.value = workingHours[day] || 'Closed';
+        }
+    });
+
+    renderServicesEditor();
+    renderUserStatus();
+}
+
+function renderServicesEditor() {
+    const container = document.getElementById('services-list');
+    if (!container) return;
+
+    container.innerHTML = '';
+    if (!services || services.length === 0) {
+        addServiceRow();
+        return;
+    }
+
+    services.forEach((service) => addServiceRow(service));
+}
+
+function addServiceRow(service = null) {
+    const container = document.getElementById('services-list');
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'service-row';
+    if (service?.id) {
+        row.dataset.serviceId = String(service.id);
+    }
+
+    row.innerHTML = `
+        <input type="text" class="form-input service-name" placeholder="Service name" value="${service?.name || ''}">
+        <input type="number" class="form-input service-price" placeholder="Price" min="0" step="0.01" value="${service?.price ?? ''}">
+        <input type="number" class="form-input service-duration" placeholder="Minutes" min="5" step="5" value="${service?.duration ?? 30}">
+        <button type="button" class="btn-outline btn-small" onclick="removeServiceRow(this)">Remove</button>
+    `;
+
+    container.appendChild(row);
+}
+
+function removeServiceRow(button) {
+    const row = button.closest('.service-row');
+    if (row) row.remove();
+
+    const container = document.getElementById('services-list');
+    if (container && container.children.length === 0) {
+        addServiceRow();
+    }
+}
+
+function collectWorkingHours() {
+    return {
+        monday: document.getElementById('hours-monday').value.trim() || 'Closed',
+        tuesday: document.getElementById('hours-tuesday').value.trim() || 'Closed',
+        wednesday: document.getElementById('hours-wednesday').value.trim() || 'Closed',
+        thursday: document.getElementById('hours-thursday').value.trim() || 'Closed',
+        friday: document.getElementById('hours-friday').value.trim() || 'Closed',
+        saturday: document.getElementById('hours-saturday').value.trim() || 'Closed',
+        sunday: document.getElementById('hours-sunday').value.trim() || 'Closed',
+    };
+}
+
+async function saveProfile(event) {
+    event.preventDefault();
+    const button = event.target.querySelector('button[type="submit"]');
+    setButtonLoading(button, true, 'Save Profile');
+
+    const payload = {
+        full_name: document.getElementById('profile-full-name').value.trim(),
+        email: document.getElementById('profile-email').value.trim(),
+    };
+
+    try {
+        const result = await authedRequest('/auth/profile', {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+        });
+        if (result.success) {
+            applyMePayload(result);
+            showToast('Profile updated successfully.', 'success');
+        }
+    } catch (error) {
+        showToast(error.message || 'Failed to update profile', 'error');
+    } finally {
+        setButtonLoading(button, false, 'Save Profile');
+    }
+}
+
+async function changePassword(event) {
+    event.preventDefault();
+    const button = event.target.querySelector('button[type="submit"]');
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+
+    if (newPassword !== confirmPassword) {
+        showToast('New password and confirmation do not match.', 'error');
+        return;
+    }
+
+    setButtonLoading(button, true, 'Update Password');
+
+    try {
+        await authedRequest('/auth/password', {
+            method: 'PATCH',
+            body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+        });
+        showToast('Password updated successfully.', 'success');
+        document.getElementById('password-form').reset();
+    } catch (error) {
+        showToast(error.message || 'Failed to update password', 'error');
+    } finally {
+        setButtonLoading(button, false, 'Update Password');
+    }
+}
+
+async function saveBusinessInfo(event) {
+    event.preventDefault();
+    const button = event.target.querySelector('button[type="submit"]');
+    setButtonLoading(button, true, 'Save Business Info');
+
+    const payload = {
+        business_name: document.getElementById('business-name').value.trim(),
+        phone: document.getElementById('business-phone').value.trim(),
+        email: document.getElementById('business-email').value.trim(),
+        address: document.getElementById('business-address').value.trim(),
+        timezone: document.getElementById('business-timezone').value.trim(),
+        greeting_message: document.getElementById('business-greeting').value.trim(),
+    };
+
+    try {
+        await authedRequest('/business/settings', {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+        });
+        showToast('Business information updated.', 'success');
+        await loadConfig();
+        await loadDashboardData();
+    } catch (error) {
+        showToast(error.message || 'Failed to save business info', 'error');
+    } finally {
+        setButtonLoading(button, false, 'Save Business Info');
+    }
+}
+
+async function saveWorkingHours(event) {
+    event.preventDefault();
+    const button = event.target.querySelector('button[type="submit"]');
+    setButtonLoading(button, true, 'Save Working Hours');
+
+    try {
+        await authedRequest('/business/settings', {
+            method: 'PATCH',
+            body: JSON.stringify({ working_hours: collectWorkingHours() }),
+        });
+        showToast('Working hours updated.', 'success');
+        await loadConfig();
+    } catch (error) {
+        showToast(error.message || 'Failed to save working hours', 'error');
+    } finally {
+        setButtonLoading(button, false, 'Save Working Hours');
+    }
+}
+
+async function saveServices() {
+    const rows = Array.from(document.querySelectorAll('#services-list .service-row'));
+    const parsedServices = rows
+        .map((row) => ({
+            id: row.dataset.serviceId || null,
+            name: row.querySelector('.service-name')?.value.trim() || '',
+            price: Number(row.querySelector('.service-price')?.value || 0),
+            duration: Number(row.querySelector('.service-duration')?.value || 0),
+        }))
+        .filter((item) => item.name);
+
+    if (parsedServices.length === 0) {
+        showToast('Add at least one service before saving.', 'error');
+        return;
+    }
+
+    try {
+        const existingActive = services.filter((service) => service.is_active !== false);
+        const submittedIds = new Set(parsedServices.filter((item) => item.id).map((item) => String(item.id)));
+
+        for (const service of parsedServices) {
+            const payload = {
+                name: service.name,
+                price: service.price,
+                duration: service.duration,
+            };
+            if (service.id) {
+                await authedRequest(`/business/services/${service.id}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload),
+                });
+            } else {
+                await authedRequest('/business/services', {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                });
+            }
+        }
+
+        for (const existing of existingActive) {
+            if (!submittedIds.has(String(existing.id))) {
+                await authedRequest(`/business/services/${existing.id}`, {
+                    method: 'DELETE',
+                });
+            }
+        }
+
+        showToast('Services updated successfully.', 'success');
+        await loadConfig();
+    } catch (error) {
+        showToast(error.message || 'Failed to save services', 'error');
     }
 }
 

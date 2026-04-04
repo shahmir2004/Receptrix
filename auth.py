@@ -1,26 +1,38 @@
 """
-Authentication & authorization helpers for Phase D multi-tenant support.
+Authentication and authorization helpers for Supabase-backed multi-tenant auth.
 
-Uses Supabase Auth for user management.  The service-role client is used
-for admin operations (creating businesses, memberships).  JWT validation
-extracts user_id from the Supabase access token so API endpoints can
-resolve the caller's business context.
+This module centralizes:
+- Input normalization and validation
+- Structured auth error mapping
+- Cookie/header token extraction
+- CSRF protection for cookie-authenticated write requests
+- Profile and password update helpers
 """
-import os
-from typing import Optional, Tuple
-from datetime import datetime
 
-from fastapi import Request, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import re
+from datetime import datetime
+from typing import Any, Optional, Tuple
+from uuid import UUID
+
+from fastapi import HTTPException, Request
 
 from supabase_client import get_supabase
 
-# FastAPI security scheme — extracts Bearer token from Authorization header
-_bearer = HTTPBearer(auto_error=False)
+_ACCESS_COOKIE_NAME = "rx_access_token"
+_REFRESH_COOKIE_NAME = "rx_refresh_token"
+_CSRF_COOKIE_NAME = "rx_csrf_token"
+_CSRF_HEADER_NAME = "x-csrf-token"
+_MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_ALLOWED_ROLES = {"owner", "admin", "staff"}
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _http_error(status_code: int, code: str, message: str) -> HTTPException:
+    return HTTPException(status_code=status_code, detail={"code": code, "message": message})
 
 
 def _extract_error_message(exc: Exception) -> str:
-    """Best-effort extraction of a useful error message from Supabase errors."""
+    """Best-effort extraction of a useful error message from Supabase exceptions."""
     for attr in ("message", "detail", "error_description", "error"):
         value = getattr(exc, attr, None)
         if value:
@@ -47,163 +59,316 @@ def _extract_error_message(exc: Exception) -> str:
     return str(exc)
 
 
-def _extract_status_code(exc: Exception, default: int = 400) -> int:
-    """Return a status code when the upstream error exposes one."""
-    status_code = getattr(exc, "status_code", None)
-    if isinstance(status_code, int) and 400 <= status_code < 600:
-        return status_code
+def _is_duplicate_user_error(message: str) -> bool:
+    lowered = message.lower()
+    return (
+        "already registered" in lowered
+        or "already exists" in lowered
+        or "duplicate" in lowered
+        or "unique" in lowered
+    )
+
+
+def _is_invalid_credentials_error(message: str) -> bool:
+    lowered = message.lower()
+    return (
+        "invalid login credentials" in lowered
+        or "invalid credentials" in lowered
+        or "email or password" in lowered
+        or "invalid_grant" in lowered
+    )
+
+
+def _is_invalid_email_error(message: str) -> bool:
+    lowered = message.lower()
+    return "invalid email" in lowered or "email address" in lowered
+
+
+def _is_weak_password_error(message: str) -> bool:
+    lowered = message.lower()
+    return "password" in lowered and (
+        "weak" in lowered
+        or "least" in lowered
+        or "minimum" in lowered
+        or "characters" in lowered
+    )
+
+
+def _map_auth_error(exc: Exception, operation: str) -> HTTPException:
+    message = _extract_error_message(exc)
+
+    if isinstance(exc, HTTPException):
+        return exc
 
     if isinstance(exc, RuntimeError):
-        return 503
+        return _http_error(503, "AUTH_SERVICE_UNAVAILABLE", "Authentication service is unavailable.")
 
-    return default
+    if operation == "signup":
+        if _is_duplicate_user_error(message):
+            return _http_error(409, "USER_ALREADY_EXISTS", "An account with this email already exists. Please sign in.")
+        if _is_invalid_email_error(message):
+            return _http_error(422, "INVALID_EMAIL", "Please provide a valid email address.")
+        if _is_weak_password_error(message):
+            return _http_error(422, "WEAK_PASSWORD", "Password does not meet security requirements.")
+        return _http_error(400, "SIGNUP_FAILED", f"Sign-up failed: {message}")
+
+    if operation == "signin":
+        if _is_invalid_credentials_error(message):
+            return _http_error(401, "INVALID_CREDENTIALS", "Invalid email or password.")
+        return _http_error(503, "SIGNIN_FAILED", "Unable to sign in right now. Please try again.")
+
+    if operation == "profile_update":
+        if _is_duplicate_user_error(message):
+            return _http_error(409, "EMAIL_ALREADY_IN_USE", "That email address is already in use.")
+        if _is_invalid_email_error(message):
+            return _http_error(422, "INVALID_EMAIL", "Please provide a valid email address.")
+        return _http_error(400, "PROFILE_UPDATE_FAILED", f"Could not update profile: {message}")
+
+    if operation == "password_update":
+        if _is_weak_password_error(message):
+            return _http_error(422, "WEAK_PASSWORD", "New password does not meet security requirements.")
+        return _http_error(400, "PASSWORD_UPDATE_FAILED", f"Could not update password: {message}")
+
+    if operation == "refresh":
+        if _is_invalid_credentials_error(message):
+            return _http_error(401, "SESSION_EXPIRED", "Session expired. Please sign in again.")
+        return _http_error(401, "SESSION_REFRESH_FAILED", "Could not refresh session. Please sign in again.")
+
+    return _http_error(400, "AUTH_ERROR", message)
+
+
+def normalize_email(email: str) -> str:
+    normalized = (email or "").strip().lower()
+    if not normalized or not _EMAIL_RE.match(normalized):
+        raise _http_error(422, "INVALID_EMAIL", "Please provide a valid email address.")
+    return normalized
+
+
+def validate_password_strength(password: str, field_name: str = "password") -> None:
+    value = password or ""
+    if len(value) < 8:
+        raise _http_error(422, "WEAK_PASSWORD", f"{field_name.capitalize()} must be at least 8 characters long.")
+    if value.lower() == value:
+        raise _http_error(422, "WEAK_PASSWORD", f"{field_name.capitalize()} must include at least one uppercase letter.")
+    if value.upper() == value:
+        raise _http_error(422, "WEAK_PASSWORD", f"{field_name.capitalize()} must include at least one lowercase letter.")
+    if not any(ch.isdigit() for ch in value):
+        raise _http_error(422, "WEAK_PASSWORD", f"{field_name.capitalize()} must include at least one number.")
+
+
+def _normalize_business_name(name: str) -> str:
+    normalized = (name or "").strip()
+    if len(normalized) < 2:
+        raise _http_error(422, "INVALID_BUSINESS_NAME", "Business name must be at least 2 characters long.")
+    return normalized
+
+
+def _validate_business_id(business_id: str) -> str:
+    if not business_id:
+        raise _http_error(400, "MISSING_BUSINESS_ID", "X-Business-Id header is required.")
+    try:
+        UUID(business_id)
+    except ValueError as exc:
+        raise _http_error(400, "INVALID_BUSINESS_ID", "X-Business-Id must be a valid UUID.") from exc
+    return business_id
+
+
+def _extract_access_token(request: Request) -> Tuple[Optional[str], Optional[str]]:
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header.split(" ", 1)[1], "header"
+
+    cookie_token = request.cookies.get(_ACCESS_COOKIE_NAME)
+    if cookie_token:
+        return cookie_token, "cookie"
+
+    return None, None
+
+
+def _enforce_csrf_for_cookie_auth(request: Request) -> None:
+    if request.method.upper() not in _MUTATING_METHODS:
+        return
+
+    csrf_cookie = request.cookies.get(_CSRF_COOKIE_NAME, "")
+    csrf_header = request.headers.get(_CSRF_HEADER_NAME, "")
+    if not csrf_cookie or not csrf_header or csrf_cookie != csrf_header:
+        raise _http_error(403, "CSRF_TOKEN_INVALID", "Security verification failed. Refresh and try again.")
+
+
+def _list_memberships(user_id: str) -> list[dict[str, Any]]:
+    sb = get_supabase()
+    memberships = sb.table("business_memberships").select(
+        "business_id, role, businesses(id, name)"
+    ).eq("user_id", user_id).execute()
+
+    return [
+        {
+            "business_id": m["business_id"],
+            "role": m["role"],
+            "business_name": m.get("businesses", {}).get("name") if m.get("businesses") else None,
+        }
+        for m in (memberships.data or [])
+    ]
 
 
 # ============ JWT / Current User ============
 
 def get_current_user_id(request: Request) -> Optional[str]:
-    """
-    Extract user_id from Supabase JWT in the Authorization header.
-    Returns None if no valid token is present (allows mixed auth/anon endpoints).
-    """
-    auth_header = request.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
+    """Extract user_id from either Authorization header or secure access-token cookie."""
+    token, source = _extract_access_token(request)
+    if not token:
         return None
 
-    token = auth_header.split(" ", 1)[1]
     sb = get_supabase()
     try:
         user_resp = sb.auth.get_user(token)
         if user_resp and user_resp.user:
+            request.state.auth_source = source
             return str(user_resp.user.id)
     except Exception:
-        pass
+        return None
     return None
 
 
 async def require_auth(request: Request) -> str:
-    """
-    FastAPI dependency — raises 401 if no valid Supabase JWT.
-    Returns the authenticated user_id (UUID string).
-    """
+    """FastAPI dependency — raises 401 if no valid session and enforces CSRF for cookie-authenticated writes."""
     user_id = get_current_user_id(request)
     if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise _http_error(401, "NOT_AUTHENTICATED", "Please sign in to continue.")
+
+    if getattr(request.state, "auth_source", None) == "cookie":
+        _enforce_csrf_for_cookie_auth(request)
+
     return user_id
 
 
 async def require_business_access(request: Request) -> Tuple[str, str]:
-    """
-    FastAPI dependency — raises 401/403 if user is not authenticated
-    or not a member of the business specified by X-Business-Id header.
-    Returns (user_id, business_id) tuple.
-    """
+    """FastAPI dependency — valid session + membership in X-Business-Id."""
     user_id = await require_auth(request)
-    business_id = request.headers.get("x-business-id", "")
-    if not business_id:
-        raise HTTPException(status_code=400, detail="X-Business-Id header required")
+    business_id = _validate_business_id(request.headers.get("x-business-id", ""))
 
     sb = get_supabase()
     result = sb.table("business_memberships").select("id").eq(
         "user_id", user_id
-    ).eq("business_id", business_id).execute()
+    ).eq("business_id", business_id).limit(1).execute()
 
     if not result.data:
-        raise HTTPException(status_code=403, detail="Not a member of this business")
+        raise _http_error(403, "BUSINESS_ACCESS_DENIED", "You do not have access to this business.")
 
     return user_id, business_id
 
 
 async def require_business_admin(request: Request) -> Tuple[str, str]:
-    """
-    FastAPI dependency — like require_business_access but requires owner/admin role.
-    Returns (user_id, business_id) tuple.
-    """
-    user_id = await require_auth(request)
-    business_id = request.headers.get("x-business-id", "")
-    if not business_id:
-        raise HTTPException(status_code=400, detail="X-Business-Id header required")
+    """FastAPI dependency — valid session + owner/admin role in X-Business-Id."""
+    user_id, business_id = await require_business_access(request)
 
     sb = get_supabase()
     result = sb.table("business_memberships").select("role").eq(
         "user_id", user_id
-    ).eq("business_id", business_id).execute()
+    ).eq("business_id", business_id).limit(1).execute()
 
-    if not result.data:
-        raise HTTPException(status_code=403, detail="Not a member of this business")
-
-    role = result.data[0]["role"]
+    role = result.data[0]["role"] if result.data else None
     if role not in ("owner", "admin"):
-        raise HTTPException(status_code=403, detail="Owner or admin role required")
+        raise _http_error(403, "BUSINESS_ADMIN_REQUIRED", "Owner or admin role required.")
 
     return user_id, business_id
 
 
 # ============ Sign Up / Sign In ============
 
-def sign_up(email: str, password: str, full_name: str = "") -> dict:
-    """
-    Create a new Supabase Auth user.
-    The on_auth_user_created trigger auto-creates the profiles row.
-    Returns {"user_id": ..., "session": ...} on success.
-    """
+def sign_up(email: str, password: str, full_name: str = "") -> dict[str, Any]:
+    """Create a new Supabase Auth user and return session artifacts when available."""
+    normalized_email = normalize_email(email)
+    validate_password_strength(password)
+
     sb = get_supabase()
     try:
         result = sb.auth.sign_up({
-            "email": email,
+            "email": normalized_email,
             "password": password,
             "options": {
-                "data": {"full_name": full_name}
+                "data": {"full_name": (full_name or "").strip()}
             }
         })
     except Exception as exc:
-        detail = _extract_error_message(exc)
-        raise HTTPException(
-            status_code=_extract_status_code(exc, default=400),
-            detail=f"Sign-up failed: {detail}",
-        ) from exc
+        raise _map_auth_error(exc, "signup") from exc
 
     if not result.user:
-        raise HTTPException(status_code=400, detail="Sign-up failed: no user was returned")
+        raise _http_error(400, "SIGNUP_FAILED", "Sign-up failed. Please try again.")
 
+    metadata = getattr(result.user, "user_metadata", {}) or {}
+    session = result.session
     return {
         "user_id": str(result.user.id),
         "email": result.user.email,
-        "access_token": result.session.access_token if result.session else None,
-        "refresh_token": result.session.refresh_token if result.session else None,
+        "full_name": metadata.get("full_name", (full_name or "").strip()),
+        "access_token": session.access_token if session else None,
+        "refresh_token": session.refresh_token if session else None,
+        "needs_email_verification": session is None,
     }
 
 
-def sign_in(email: str, password: str) -> dict:
-    """
-    Sign in an existing user. Returns tokens + user info.
-    """
-    sb = get_supabase()
-    result = sb.auth.sign_in_with_password({
-        "email": email,
-        "password": password,
-    })
-    if not result.user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+def sign_in(email: str, password: str) -> dict[str, Any]:
+    """Authenticate an existing user and return tokens + business memberships."""
+    normalized_email = normalize_email(email)
 
-    # Look up their business memberships
-    memberships = sb.table("business_memberships").select(
-        "business_id, role, businesses(id, name)"
-    ).eq("user_id", str(result.user.id)).execute()
+    sb = get_supabase()
+    try:
+        result = sb.auth.sign_in_with_password({
+            "email": normalized_email,
+            "password": password,
+        })
+    except Exception as exc:
+        raise _map_auth_error(exc, "signin") from exc
+
+    if not result.user or not result.session:
+        raise _http_error(401, "INVALID_CREDENTIALS", "Invalid email or password.")
+
+    memberships = _list_memberships(str(result.user.id))
+    current_business_id = memberships[0]["business_id"] if memberships else None
+
+    metadata = getattr(result.user, "user_metadata", {}) or {}
+    return {
+        "user_id": str(result.user.id),
+        "email": result.user.email,
+        "full_name": metadata.get("full_name", ""),
+        "access_token": result.session.access_token,
+        "refresh_token": result.session.refresh_token,
+        "businesses": memberships,
+        "current_business_id": current_business_id,
+    }
+
+
+def refresh_session(refresh_token: str) -> dict[str, Any]:
+    """Refresh an expired access token with a refresh token."""
+    token = (refresh_token or "").strip()
+    if not token:
+        raise _http_error(401, "SESSION_EXPIRED", "Session expired. Please sign in again.")
+
+    sb = get_supabase()
+    try:
+        try:
+            result = sb.auth.refresh_session(token)
+        except TypeError:
+            result = sb.auth.refresh_session({"refresh_token": token})
+    except Exception as exc:
+        raise _map_auth_error(exc, "refresh") from exc
+
+    if not result.session or not result.user:
+        raise _http_error(401, "SESSION_EXPIRED", "Session expired. Please sign in again.")
+
+    memberships = _list_memberships(str(result.user.id))
+    current_business_id = memberships[0]["business_id"] if memberships else None
+    metadata = getattr(result.user, "user_metadata", {}) or {}
 
     return {
         "user_id": str(result.user.id),
         "email": result.user.email,
+        "full_name": metadata.get("full_name", ""),
         "access_token": result.session.access_token,
         "refresh_token": result.session.refresh_token,
-        "businesses": [
-            {
-                "business_id": m["business_id"],
-                "role": m["role"],
-                "business_name": m["businesses"]["name"] if m.get("businesses") else None
-            }
-            for m in memberships.data
-        ] if memberships.data else []
+        "businesses": memberships,
+        "current_business_id": current_business_id,
     }
 
 
@@ -217,12 +382,9 @@ def create_business_for_user(
     address: str = "",
     timezone: str = "Asia/Karachi",
     greeting_message: str = "",
-    working_hours: Optional[dict] = None
-) -> dict:
-    """
-    Create a new business and assign the user as owner.
-    Returns the new business record.
-    """
+    working_hours: Optional[dict] = None,
+) -> dict[str, Any]:
+    """Create a new business and assign the user as owner."""
     sb = get_supabase()
 
     now = datetime.now().isoformat()
@@ -233,16 +395,17 @@ def create_business_for_user(
         "thursday": "9:00 AM - 6:00 PM",
         "friday": "9:00 AM - 6:00 PM",
         "saturday": "10:00 AM - 4:00 PM",
-        "sunday": "Closed"
+        "sunday": "Closed",
     }
 
     biz_data = {
-        "name": business_name,
-        "phone": phone,
-        "email": email,
-        "address": address,
-        "timezone": timezone,
-        "greeting_message": greeting_message or "Thank you for calling. How may I assist you today?",
+        "name": _normalize_business_name(business_name),
+        "phone": (phone or "").strip(),
+        "email": (email or "").strip(),
+        "address": (address or "").strip(),
+        "timezone": (timezone or "Asia/Karachi").strip() or "Asia/Karachi",
+        "greeting_message": (greeting_message or "").strip()
+        or "Thank you for calling. How may I assist you today?",
         "working_hours": working_hours or default_hours,
         "created_at": now,
         "updated_at": now,
@@ -251,7 +414,6 @@ def create_business_for_user(
     result = sb.table("businesses").insert(biz_data).execute()
     business = result.data[0]
 
-    # Create owner membership
     sb.table("business_memberships").insert({
         "user_id": user_id,
         "business_id": business["id"],
@@ -261,24 +423,126 @@ def create_business_for_user(
     return business
 
 
-def add_business_member(business_id: str, email: str, role: str = "staff") -> dict:
-    """
-    Add a user to a business by their email.
-    The user must already have a Supabase Auth account (and therefore a profile).
-    """
-    sb = get_supabase()
+def add_business_member(business_id: str, email: str, role: str = "staff") -> dict[str, Any]:
+    """Add a user to a business by email. The target user must already exist."""
+    normalized_role = (role or "staff").strip().lower()
+    if normalized_role not in _ALLOWED_ROLES:
+        raise _http_error(422, "INVALID_ROLE", "Role must be one of: owner, admin, staff.")
 
-    # Look up the user's profile by email
-    profile = sb.table("profiles").select("id").eq("email", email).execute()
+    sb = get_supabase()
+    profile = sb.table("profiles").select("id").eq("email", normalize_email(email)).limit(1).execute()
     if not profile.data:
-        raise HTTPException(status_code=404, detail=f"No user found with email {email}")
+        raise _http_error(404, "USER_NOT_FOUND", "No user found with that email.")
 
     target_user_id = profile.data[0]["id"]
+    try:
+        sb.table("business_memberships").insert({
+            "user_id": target_user_id,
+            "business_id": business_id,
+            "role": normalized_role,
+        }).execute()
+    except Exception as exc:
+        message = _extract_error_message(exc)
+        if "duplicate" in message.lower() or "unique" in message.lower():
+            raise _http_error(409, "MEMBERSHIP_EXISTS", "User is already a member of this business.") from exc
+        raise _http_error(400, "MEMBERSHIP_ADD_FAILED", f"Unable to add member: {message}") from exc
 
-    sb.table("business_memberships").insert({
-        "user_id": target_user_id,
-        "business_id": business_id,
-        "role": role,
-    }).execute()
+    return {"user_id": target_user_id, "business_id": business_id, "role": normalized_role}
 
-    return {"user_id": target_user_id, "business_id": business_id, "role": role}
+
+def get_user_profile(user_id: str) -> dict[str, Any]:
+    """Return profile and business memberships for the authenticated user."""
+    sb = get_supabase()
+
+    profile_result = sb.table("profiles").select("*").eq("id", user_id).limit(1).execute()
+    profile = profile_result.data[0] if profile_result.data else None
+
+    businesses = _list_memberships(user_id)
+    return {
+        "user_id": user_id,
+        "profile": profile,
+        "businesses": businesses,
+        "current_business_id": businesses[0]["business_id"] if businesses else None,
+    }
+
+
+def update_user_profile(user_id: str, full_name: Optional[str], email: Optional[str]) -> dict[str, Any]:
+    """Update authenticated user profile fields in Supabase Auth + profiles table."""
+    sb = get_supabase()
+
+    existing = get_user_profile(user_id).get("profile")
+    if not existing:
+        raise _http_error(404, "PROFILE_NOT_FOUND", "Profile not found for this account.")
+
+    new_full_name = (full_name or "").strip() if full_name is not None else existing.get("full_name", "")
+    new_email = normalize_email(email) if email is not None else existing.get("email", "")
+
+    updates: dict[str, Any] = {}
+    if new_full_name != (existing.get("full_name") or ""):
+        updates["full_name"] = new_full_name
+    if new_email != existing.get("email"):
+        updates["email"] = new_email
+
+    if not updates:
+        raise _http_error(400, "NO_PROFILE_CHANGES", "No profile changes submitted.")
+
+    auth_updates: dict[str, Any] = {}
+    if "email" in updates:
+        auth_updates["email"] = updates["email"]
+    if "full_name" in updates:
+        auth_updates["user_metadata"] = {"full_name": updates["full_name"]}
+
+    if auth_updates:
+        try:
+            sb.auth.admin.update_user_by_id(user_id, auth_updates)
+        except Exception as exc:
+            raise _map_auth_error(exc, "profile_update") from exc
+
+    try:
+        sb.table("profiles").update(updates).eq("id", user_id).execute()
+    except Exception as exc:
+        raise _map_auth_error(exc, "profile_update") from exc
+
+    return get_user_profile(user_id)
+
+
+def update_user_password(user_id: str, current_password: str, new_password: str) -> dict[str, Any]:
+    """Change authenticated user password after current-password verification."""
+    current = current_password or ""
+    new_value = new_password or ""
+
+    if not current:
+        raise _http_error(422, "CURRENT_PASSWORD_REQUIRED", "Current password is required.")
+    if current == new_value:
+        raise _http_error(422, "PASSWORD_UNCHANGED", "New password must be different from current password.")
+
+    validate_password_strength(new_value, field_name="new password")
+
+    profile = get_user_profile(user_id).get("profile")
+    if not profile or not profile.get("email"):
+        raise _http_error(404, "PROFILE_NOT_FOUND", "Profile not found for this account.")
+
+    # Verify current password using the regular auth flow.
+    try:
+        sign_in(profile["email"], current)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            raise _http_error(401, "CURRENT_PASSWORD_INVALID", "Current password is incorrect.") from exc
+        raise
+
+    sb = get_supabase()
+    try:
+        sb.auth.admin.update_user_by_id(user_id, {"password": new_value})
+    except Exception as exc:
+        raise _map_auth_error(exc, "password_update") from exc
+
+    return {"success": True, "message": "Password updated successfully."}
+
+
+def session_cookie_names() -> dict[str, str]:
+    """Expose cookie names to keep main.py cookie handling centralized and consistent."""
+    return {
+        "access": _ACCESS_COOKIE_NAME,
+        "refresh": _REFRESH_COOKIE_NAME,
+        "csrf": _CSRF_COOKIE_NAME,
+    }
