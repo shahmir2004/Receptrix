@@ -359,7 +359,8 @@ async function initializeSession() {
         const data = await readResponsePayload(response);
         if (response.ok && data.success) {
             applyMePayload(data);
-            showDashboard();
+            // Keep landing page as the default entry; dashboard opens only on explicit action.
+            showLanding();
             return;
         }
     } catch (error) {

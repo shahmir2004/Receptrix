@@ -375,6 +375,26 @@ a:hover { color: var(--primary-light); }
     color: var(--primary-light);
 }
 
+.auth-back-btn {
+    margin-top: 10px;
+    width: 100%;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: var(--font-family);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.auth-back-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(99, 102, 241, 0.08);
+}
+
 .auth-divider {
     display: flex;
     align-items: center;
