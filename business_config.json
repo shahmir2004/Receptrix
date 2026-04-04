@@ -1,5 +1,7 @@
 {
-  "business_name": "Sample Business",
+  "business_name": "Your Business Name",
+  "timezone": "Asia/Karachi",
+  "greeting_message": "Thank you for calling. How may I assist you today?",
   "working_hours": {
     "monday": "9:00 AM - 6:00 PM",
     "tuesday": "9:00 AM - 6:00 PM",
@@ -12,24 +14,27 @@
   "services": [
     {
       "name": "Consultation",
-      "price": 50,
-      "duration": 30
+      "price": 2000,
+      "duration": 30,
+      "description": "Initial consultation session"
     },
     {
       "name": "Standard Service",
-      "price": 100,
-      "duration": 60
+      "price": 5000,
+      "duration": 60,
+      "description": "Standard service package"
     },
     {
       "name": "Premium Service",
-      "price": 150,
-      "duration": 90
+      "price": 10000,
+      "duration": 90,
+      "description": "Premium full service package"
     }
   ],
   "contact_info": {
-    "phone": "+1 (555) 123-4567",
-    "email": "info@samplebusiness.com",
-    "address": "123 Main Street, City, State 12345"
+    "phone": "+92 3095218142",
+    "email": "info@yourbusiness.pk",
+    "address": "Your Business Address, City, Pakistan"
   }
 }
 
