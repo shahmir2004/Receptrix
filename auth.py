@@ -211,6 +211,61 @@ def _list_memberships(user_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def _auth_response_user_payload(auth_response: Any) -> Optional[dict[str, Any]]:
+    """Normalize admin get_user_by_id response across supabase-py versions."""
+    if auth_response is None:
+        return None
+
+    raw_user = getattr(auth_response, "user", None)
+    if raw_user is None and isinstance(auth_response, dict):
+        raw_user = auth_response.get("user")
+
+    if raw_user is None:
+        return None
+
+    if isinstance(raw_user, dict):
+        return raw_user
+
+    return {
+        "id": getattr(raw_user, "id", None),
+        "email": getattr(raw_user, "email", None),
+        "user_metadata": getattr(raw_user, "user_metadata", {}) or {},
+    }
+
+
+def _ensure_profile_exists(user_id: str) -> None:
+    """Ensure a profile row exists for user_id (covers trigger lag and signup edge cases)."""
+    sb = get_supabase()
+
+    profile_result = sb.table("profiles").select("id").eq("id", user_id).limit(1).execute()
+    if profile_result.data:
+        return
+
+    try:
+        auth_user_resp = sb.auth.admin.get_user_by_id(user_id)
+    except Exception as exc:
+        raise _http_error(409, "USER_ALREADY_EXISTS", "An account with this email already exists. Please sign in.") from exc
+
+    auth_user = _auth_response_user_payload(auth_user_resp)
+    if not auth_user or not auth_user.get("id") or not auth_user.get("email"):
+        raise _http_error(409, "USER_ALREADY_EXISTS", "An account with this email already exists. Please sign in.")
+
+    metadata = auth_user.get("user_metadata", {}) or {}
+    profile_insert = {
+        "id": str(auth_user["id"]),
+        "email": str(auth_user["email"]),
+        "full_name": str(metadata.get("full_name", "") or ""),
+    }
+
+    try:
+        sb.table("profiles").insert(profile_insert).execute()
+    except Exception as exc:
+        msg = _extract_error_message(exc).lower()
+        if "duplicate" in msg or "unique" in msg:
+            return
+        raise _http_error(400, "PROFILE_CREATE_FAILED", "Unable to initialize profile for this account.") from exc
+
+
 # ============ JWT / Current User ============
 
 def get_current_user_id(request: Request) -> Optional[str]:
@@ -281,8 +336,8 @@ def sign_up(email: str, password: str, full_name: str = "") -> dict[str, Any]:
     normalized_email = normalize_email(email)
     validate_password_strength(password)
 
-    sb = get_supabase()
     try:
+        sb = get_supabase()
         result = sb.auth.sign_up({
             "email": normalized_email,
             "password": password,
@@ -298,6 +353,13 @@ def sign_up(email: str, password: str, full_name: str = "") -> dict[str, Any]:
 
     metadata = getattr(result.user, "user_metadata", {}) or {}
     session = result.session
+    identities = getattr(result.user, "identities", None) or []
+
+    # Supabase can return a user-like object for existing accounts when anti-enumeration is enabled.
+    # In this case we intentionally surface a conflict instead of continuing onboarding.
+    if session is None and isinstance(identities, list) and len(identities) == 0:
+        raise _http_error(409, "USER_ALREADY_EXISTS", "An account with this email already exists. Please sign in.")
+
     return {
         "user_id": str(result.user.id),
         "email": result.user.email,
@@ -312,8 +374,8 @@ def sign_in(email: str, password: str) -> dict[str, Any]:
     """Authenticate an existing user and return tokens + business memberships."""
     normalized_email = normalize_email(email)
 
-    sb = get_supabase()
     try:
+        sb = get_supabase()
         result = sb.auth.sign_in_with_password({
             "email": normalized_email,
             "password": password,
@@ -386,6 +448,7 @@ def create_business_for_user(
 ) -> dict[str, Any]:
     """Create a new business and assign the user as owner."""
     sb = get_supabase()
+    _ensure_profile_exists(user_id)
 
     now = datetime.now().isoformat()
     default_hours = {
@@ -414,11 +477,25 @@ def create_business_for_user(
     result = sb.table("businesses").insert(biz_data).execute()
     business = result.data[0]
 
-    sb.table("business_memberships").insert({
-        "user_id": user_id,
-        "business_id": business["id"],
-        "role": "owner",
-    }).execute()
+    try:
+        sb.table("business_memberships").insert({
+            "user_id": user_id,
+            "business_id": business["id"],
+            "role": "owner",
+        }).execute()
+    except Exception as exc:
+        # Best-effort cleanup to avoid orphaned businesses if membership insert fails.
+        try:
+            sb.table("businesses").delete().eq("id", business["id"]).execute()
+        except Exception:
+            pass
+
+        message = _extract_error_message(exc).lower()
+        if "foreign key" in message:
+            raise _http_error(409, "USER_ALREADY_EXISTS", "An account with this email already exists. Please sign in.") from exc
+        if "duplicate" in message or "unique" in message:
+            raise _http_error(409, "BUSINESS_MEMBERSHIP_EXISTS", "This account is already linked to the business.") from exc
+        raise _http_error(400, "BUSINESS_CREATE_FAILED", "Unable to complete business setup during signup.") from exc
 
     return business
 
