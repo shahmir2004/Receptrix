@@ -1316,6 +1316,39 @@ a:hover { color: var(--primary-light); }
     gap: 20px;
 }
 
+.setup-banner {
+    margin-bottom: 20px;
+    padding: 18px 20px;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(59, 130, 246, 0.08));
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.setup-banner h3 {
+    margin: 0 0 6px;
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.setup-banner p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.business-setup-hint {
+    margin-top: -8px;
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
 .settings-form {
     display: flex;
     flex-direction: column;
@@ -2379,6 +2412,10 @@ a:hover { color: var(--primary-light); }
     }
     .service-row {
         grid-template-columns: 1fr;
+    }
+    .setup-banner {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
 

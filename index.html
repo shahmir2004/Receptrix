@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#06060b">
     <title>Receptrix — AI Voice Receptionist</title>
-    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="style.css?v=6">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -259,6 +259,14 @@
                         </h1>
                         <p>Overview of your AI receptionist activity</p>
                     </div>
+                </div>
+
+                <div id="no-business-banner" class="setup-banner hidden">
+                    <div>
+                        <h3>Finish Setup To Start Using Receptrix</h3>
+                        <p>You are signed in, but no business is linked yet. Create one in Settings to unlock appointments, calls, and voice features.</p>
+                    </div>
+                    <button type="button" class="btn-primary btn-small" onclick="openBusinessSetup()">Go To Settings</button>
                 </div>
 
                 <div class="stats-grid">
@@ -539,6 +547,7 @@
 
                     <div class="card">
                         <h3>Business Information</h3>
+                        <p id="business-setup-hint" class="business-setup-hint">Update your business details below.</p>
                         <form class="settings-form" id="business-form" onsubmit="saveBusinessInfo(event)">
                             <div class="form-group">
                                 <label for="business-name">Business Name</label>
@@ -564,7 +573,7 @@
                                 <label for="business-greeting">Greeting Message</label>
                                 <textarea id="business-greeting" class="form-input" rows="3"></textarea>
                             </div>
-                            <button type="submit" class="btn-primary" style="width:100%;justify-content:center;">Save Business Info</button>
+                            <button type="submit" class="btn-primary" id="business-save-btn" style="width:100%;justify-content:center;">Save Business Info</button>
                         </form>
                     </div>
 
@@ -666,6 +675,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=5"></script>
+    <script src="script.js?v=6"></script>
 </body>
 </html>

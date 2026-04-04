@@ -153,6 +153,7 @@ function clearAuth() {
     businessMemberships = [];
     setBusinessContext(null);
     renderUserStatus();
+    renderBusinessSetupState();
 }
 
 function getErrorMessage(payload, fallback = 'Request failed') {
@@ -256,6 +257,77 @@ async function ensureActiveBusinessContext() {
     return false;
 }
 
+function hasActiveBusinessContext() {
+    return Boolean(currentBusinessId);
+}
+
+function renderBusinessSetupState() {
+    const setupBanner = document.getElementById('no-business-banner');
+    if (!setupBanner) return;
+
+    const needsSetup = isAuthenticated && !hasActiveBusinessContext();
+    setupBanner.classList.toggle('hidden', !needsSetup);
+
+    if (!needsSetup) return;
+
+    animateCounter(document.getElementById('total-appointments'), 0);
+    animateCounter(document.getElementById('today-appointments'), 0);
+    animateCounter(document.getElementById('total-calls'), 0);
+    animateCounter(document.getElementById('completed-calls'), 0);
+
+    const schedule = document.getElementById('todays-schedule');
+    if (schedule) {
+        schedule.innerHTML = '<p class="empty-state">Create your business in Settings to start receiving appointments.</p>';
+    }
+
+    const recentCalls = document.getElementById('recent-calls');
+    if (recentCalls) {
+        recentCalls.innerHTML = '<p class="empty-state">Create your business in Settings to start tracking calls.</p>';
+    }
+}
+
+function requireBusinessContext(message = 'Create your business in Settings to use this feature.') {
+    if (hasActiveBusinessContext()) return true;
+    showToast(message, 'info');
+    return false;
+}
+
+function activateTab(tab) {
+    const restrictedTabs = ['appointments', 'calls', 'chat'];
+    if (!hasActiveBusinessContext() && restrictedTabs.includes(tab)) {
+        showToast('Create your business in Settings to unlock this section.', 'info');
+        tab = 'settings';
+    }
+
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach((item) => {
+        item.classList.toggle('active', item.dataset.tab === tab);
+    });
+
+    document.querySelectorAll('.tab-content').forEach((content) => {
+        content.classList.toggle('active', content.id === tab);
+    });
+
+    if (tab === 'dashboard') loadDashboardData();
+    if (tab === 'appointments') loadAppointments();
+    if (tab === 'calls') loadCallLogs();
+    if (tab === 'settings') loadConfig();
+}
+
+function openBusinessSetup() {
+    if (!isAuthenticated) {
+        showAuth();
+        showToast('Please sign in first.', 'info');
+        return;
+    }
+
+    document.getElementById('landing').classList.add('hidden');
+    document.getElementById('auth-page').classList.add('hidden');
+    document.querySelector('.app-container').classList.remove('hidden');
+    activateTab('settings');
+    window.scrollTo(0, 0);
+}
+
 function renderUserStatus() {
     const nameEl = document.getElementById('user-status-name');
     const emailEl = document.getElementById('user-status-email');
@@ -275,6 +347,8 @@ function renderUserStatus() {
     businessEl.textContent = activeBusiness
         ? `${activeBusiness.business_name || 'Business'} (${activeBusiness.role})`
         : 'No business assigned';
+
+    renderBusinessSetupState();
 }
 
 // ============ Auth ============
@@ -309,15 +383,15 @@ async function handleSignIn(event) {
         if (response.ok && data.success) {
             applyAuthPayload(data);
 
-            const hasBusiness = await ensureActiveBusinessContext();
-            if (!hasBusiness) {
-                showToast('Signed in, but no business access is linked to this account.', 'error');
-                return;
-            }
+            await ensureActiveBusinessContext();
 
             const opened = await showDashboard();
             if (opened) {
-                showToast('Signed in successfully!', 'success');
+                if (hasActiveBusinessContext()) {
+                    showToast('Signed in successfully!', 'success');
+                } else {
+                    showToast('Signed in successfully. Add your business from Settings to continue setup.', 'info');
+                }
             }
         } else {
             document.getElementById('signin-password').value = '';
@@ -453,18 +527,19 @@ async function showDashboard() {
         return false;
     }
 
-    const hasBusiness = await ensureActiveBusinessContext();
-    if (!hasBusiness) {
-        showAuth();
-        showToast('No business found for this account. Contact support.', 'error');
-        return false;
-    }
+    await ensureActiveBusinessContext();
 
     document.getElementById('landing').classList.add('hidden');
     document.getElementById('auth-page').classList.add('hidden');
     document.querySelector('.app-container').classList.remove('hidden');
-    loadDashboardData();
-    loadConfig();
+
+    if (hasActiveBusinessContext()) {
+        activateTab('dashboard');
+    } else {
+        activateTab('settings');
+        renderBusinessSetupState();
+    }
+
     window.scrollTo(0, 0);
     return true;
 }
@@ -483,19 +558,7 @@ function initNavigation() {
 
     navItems.forEach(item => {
         item.addEventListener('click', () => {
-            const tab = item.dataset.tab;
-
-            navItems.forEach(nav => nav.classList.remove('active'));
-            item.classList.add('active');
-
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            document.getElementById(tab).classList.add('active');
-
-            if (tab === 'appointments') loadAppointments();
-            if (tab === 'calls') loadCallLogs();
-            if (tab === 'settings') loadConfig();
+            activateTab(item.dataset.tab);
         });
     });
 }
@@ -503,6 +566,11 @@ function initNavigation() {
 // ============ Dashboard ============
 
 async function loadDashboardData() {
+    if (!hasActiveBusinessContext()) {
+        renderBusinessSetupState();
+        return;
+    }
+
     try {
         const statsResponse = await fetch(`${API_BASE_URL}/stats`, {
             headers: apiHeaders(),
@@ -586,6 +654,14 @@ function renderRecentCalls(calls) {
 // ============ Appointments ============
 
 async function loadAppointments() {
+    if (!hasActiveBusinessContext()) {
+        const tbody = document.getElementById('appointments-table');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Create your business in Settings to manage appointments.</td></tr>';
+        }
+        return;
+    }
+
     try {
         const response = await fetch(`${API_BASE_URL}/appointments`, {
             headers: apiHeaders(),
@@ -625,6 +701,8 @@ function renderAppointmentsTable(appointments) {
 }
 
 async function updateAppointmentStatus(id, status) {
+    if (!requireBusinessContext()) return;
+
     try {
         const response = await fetch(`${API_BASE_URL}/appointments/${id}/status?status=${status}`, {
             method: 'PATCH',
@@ -652,6 +730,10 @@ function filterAppointments() {
 // ============ New Appointment Modal ============
 
 function showNewAppointmentModal() {
+    if (!requireBusinessContext('Create your business in Settings before creating appointments.')) {
+        return;
+    }
+
     document.getElementById('appointment-modal').classList.add('show');
     loadServicesForModal();
 
@@ -665,6 +747,8 @@ function closeModal() {
 }
 
 async function loadServicesForModal() {
+    if (!hasActiveBusinessContext()) return;
+
     try {
         const response = await fetch(`${API_BASE_URL}/services`, {
             headers: apiHeaders(),
@@ -715,6 +799,10 @@ document.getElementById('apt-date')?.addEventListener('change', async (e) => {
 async function createAppointment(event) {
     event.preventDefault();
 
+    if (!requireBusinessContext('Create your business in Settings before creating appointments.')) {
+        return;
+    }
+
     const data = {
         caller_name: document.getElementById('apt-name').value,
         caller_phone: document.getElementById('apt-phone').value,
@@ -752,6 +840,14 @@ async function createAppointment(event) {
 // ============ Call Logs ============
 
 async function loadCallLogs() {
+    if (!hasActiveBusinessContext()) {
+        const tbody = document.getElementById('calls-table');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Create your business in Settings to view call logs.</td></tr>';
+        }
+        return;
+    }
+
     try {
         const response = await fetch(`${API_BASE_URL}/calls`, {
             headers: apiHeaders(),
@@ -1046,6 +1142,7 @@ async function sendMessage() {
     const message = input.value.trim();
 
     if (!message) return;
+    if (!requireBusinessContext('Create your business in Settings before using voice test.')) return;
 
     addChatMessage(message, true, 'You');
     input.value = '';
@@ -1112,12 +1209,20 @@ if (synthesis) {
 // ============ Settings ============
 
 async function loadConfig() {
-    if (!isAuthenticated || !currentBusinessId) return;
+    if (!isAuthenticated) return;
 
     try {
         const meData = await authedRequest('/auth/me', { method: 'GET' });
         if (meData.success) {
             applyMePayload(meData);
+        }
+
+        if (!hasActiveBusinessContext()) {
+            config = null;
+            services = [];
+            fillSettingsForms();
+            renderBusinessSetupState();
+            return;
         }
 
         const businessSettings = await authedRequest('/business/settings', { method: 'GET' });
@@ -1140,10 +1245,21 @@ function fillSettingsForms() {
 
     document.getElementById('business-name').value = config?.name || '';
     document.getElementById('business-phone').value = config?.phone || '';
-    document.getElementById('business-email').value = config?.email || '';
+    document.getElementById('business-email').value = config?.email || currentUser?.email || '';
     document.getElementById('business-address').value = config?.address || '';
     document.getElementById('business-timezone').value = config?.timezone || 'Asia/Karachi';
     document.getElementById('business-greeting').value = config?.greeting_message || '';
+
+    const setupHint = document.getElementById('business-setup-hint');
+    const saveButton = document.getElementById('business-save-btn');
+    if (setupHint) {
+        setupHint.textContent = hasActiveBusinessContext()
+            ? 'Update your business details below.'
+            : 'No business is linked yet. Fill this form and click Create Business.';
+    }
+    if (saveButton) {
+        saveButton.textContent = hasActiveBusinessContext() ? 'Save Business Info' : 'Create Business';
+    }
 
     const workingHours = config?.working_hours || {};
     ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].forEach((day) => {
@@ -1161,6 +1277,11 @@ function renderServicesEditor() {
     const container = document.getElementById('services-list');
     if (!container) return;
 
+    if (!hasActiveBusinessContext()) {
+        container.innerHTML = '<p class="empty-state">Create your business first to manage services.</p>';
+        return;
+    }
+
     container.innerHTML = '';
     if (!services || services.length === 0) {
         addServiceRow();
@@ -1171,6 +1292,8 @@ function renderServicesEditor() {
 }
 
 function addServiceRow(service = null) {
+    if (!hasActiveBusinessContext()) return;
+
     const container = document.getElementById('services-list');
     if (!container) return;
 
@@ -1269,7 +1392,7 @@ async function changePassword(event) {
 async function saveBusinessInfo(event) {
     event.preventDefault();
     const button = event.target.querySelector('button[type="submit"]');
-    setButtonLoading(button, true, 'Save Business Info');
+    setButtonLoading(button, true, hasActiveBusinessContext() ? 'Save Business Info' : 'Create Business');
 
     const payload = {
         business_name: document.getElementById('business-name').value.trim(),
@@ -1280,23 +1403,54 @@ async function saveBusinessInfo(event) {
         greeting_message: document.getElementById('business-greeting').value.trim(),
     };
 
+    if (!payload.business_name) {
+        showToast('Business name is required.', 'error');
+        setButtonLoading(button, false, hasActiveBusinessContext() ? 'Save Business Info' : 'Create Business');
+        return;
+    }
+
     try {
-        await authedRequest('/business/settings', {
-            method: 'PATCH',
-            body: JSON.stringify(payload),
-        });
-        showToast('Business information updated.', 'success');
+        if (hasActiveBusinessContext()) {
+            await authedRequest('/business/settings', {
+                method: 'PATCH',
+                body: JSON.stringify(payload),
+            });
+            showToast('Business information updated.', 'success');
+        } else {
+            await authedRequest('/auth/business', {
+                method: 'POST',
+                body: JSON.stringify({
+                    business_name: payload.business_name,
+                    phone: payload.phone,
+                    email: payload.email,
+                    address: payload.address,
+                    timezone: payload.timezone || 'Asia/Karachi',
+                    greeting_message: payload.greeting_message,
+                    working_hours: collectWorkingHours(),
+                }),
+            });
+
+            const meData = await authedRequest('/auth/me', { method: 'GET' });
+            if (meData.success) {
+                applyMePayload(meData);
+            }
+
+            showToast('Business created successfully.', 'success');
+        }
+
         await loadConfig();
         await loadDashboardData();
     } catch (error) {
         showToast(error.message || 'Failed to save business info', 'error');
     } finally {
-        setButtonLoading(button, false, 'Save Business Info');
+        setButtonLoading(button, false, hasActiveBusinessContext() ? 'Save Business Info' : 'Create Business');
     }
 }
 
 async function saveWorkingHours(event) {
     event.preventDefault();
+    if (!requireBusinessContext('Create your business first, then set working hours.')) return;
+
     const button = event.target.querySelector('button[type="submit"]');
     setButtonLoading(button, true, 'Save Working Hours');
 
@@ -1315,6 +1469,8 @@ async function saveWorkingHours(event) {
 }
 
 async function saveServices() {
+    if (!requireBusinessContext('Create your business first, then add services.')) return;
+
     const rows = Array.from(document.querySelectorAll('#services-list .service-row'));
     const parsedServices = rows
         .map((row) => ({
