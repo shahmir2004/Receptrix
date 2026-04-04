@@ -115,6 +115,22 @@ function apiHeaders(extra = {}) {
     return headers;
 }
 
+async function readResponsePayload(response) {
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+        return response.json();
+    }
+
+    const text = await response.text();
+    if (!text) return {};
+
+    try {
+        return JSON.parse(text);
+    } catch {
+        return { detail: text };
+    }
+}
+
 function setBusinessContext(businessId, token) {
     currentBusinessId = businessId;
     authToken = token;
@@ -153,7 +169,7 @@ async function handleSignIn(event) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
         });
-        const data = await response.json();
+        const data = await readResponsePayload(response);
         if (response.ok && data.access_token) {
             setBusinessContext(data.business_id || null, data.access_token);
             showToast('Signed in successfully!', 'success');
@@ -179,7 +195,7 @@ async function handleSignUp(event) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password, full_name: name })
         });
-        const data = await response.json();
+        const data = await readResponsePayload(response);
         if (response.ok && data.access_token) {
             setBusinessContext(data.business_id || null, data.access_token);
             showToast('Account created! Welcome to Receptrix.', 'success');
@@ -782,7 +798,11 @@ async function sendMessage() {
             })
         });
 
-        const data = await response.json();
+        const data = await readResponsePayload(response);
+
+        if (!response.ok) {
+            throw new Error(data.detail || data.message || `Request failed with status ${response.status}`);
+        }
 
         addChatMessage(data.message, false, 'AI Receptionist');
         conversationHistory.push({ role: 'assistant', content: data.message });

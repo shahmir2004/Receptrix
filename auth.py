@@ -19,6 +19,46 @@ from supabase_client import get_supabase
 _bearer = HTTPBearer(auto_error=False)
 
 
+def _extract_error_message(exc: Exception) -> str:
+    """Best-effort extraction of a useful error message from Supabase errors."""
+    for attr in ("message", "detail", "error_description", "error"):
+        value = getattr(exc, attr, None)
+        if value:
+            return str(value)
+
+    response = getattr(exc, "response", None)
+    if response is not None:
+        try:
+            body = response.json()
+            if isinstance(body, dict):
+                for key in ("message", "detail", "error", "error_description", "msg"):
+                    if body.get(key):
+                        return str(body[key])
+                return str(body)
+            if body:
+                return str(body)
+        except Exception:
+            text = getattr(response, "text", None)
+            if text:
+                return str(text)
+
+    if exc.args:
+        return str(exc.args[0])
+    return str(exc)
+
+
+def _extract_status_code(exc: Exception, default: int = 400) -> int:
+    """Return a status code when the upstream error exposes one."""
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, int) and 400 <= status_code < 600:
+        return status_code
+
+    if isinstance(exc, RuntimeError):
+        return 503
+
+    return default
+
+
 # ============ JWT / Current User ============
 
 def get_current_user_id(request: Request) -> Optional[str]:
@@ -108,15 +148,23 @@ def sign_up(email: str, password: str, full_name: str = "") -> dict:
     Returns {"user_id": ..., "session": ...} on success.
     """
     sb = get_supabase()
-    result = sb.auth.sign_up({
-        "email": email,
-        "password": password,
-        "options": {
-            "data": {"full_name": full_name}
-        }
-    })
+    try:
+        result = sb.auth.sign_up({
+            "email": email,
+            "password": password,
+            "options": {
+                "data": {"full_name": full_name}
+            }
+        })
+    except Exception as exc:
+        detail = _extract_error_message(exc)
+        raise HTTPException(
+            status_code=_extract_status_code(exc, default=400),
+            detail=f"Sign-up failed: {detail}",
+        ) from exc
+
     if not result.user:
-        raise HTTPException(status_code=400, detail="Sign-up failed")
+        raise HTTPException(status_code=400, detail="Sign-up failed: no user was returned")
 
     return {
         "user_id": str(result.user.id),

@@ -579,8 +579,21 @@ async def chat(http_request: Request, request: ChatRequest):
             message=result["message"],
             intent=result["intent"]
         )
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        error_message = str(e)
+        status_code = 503 if "must be set" in error_message.lower() else 500
+        return JSONResponse(
+            status_code=status_code,
+            content={"detail": f"Error processing chat: {error_message}"},
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
+        logger.exception("Error processing chat")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Error processing chat: {str(e)}"},
+        )
 
 
 # ============ Services Endpoints ============
