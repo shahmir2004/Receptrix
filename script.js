@@ -1,26 +1,231 @@
 /**
- * AI Voice Receptionist Dashboard JavaScript
+ * Receptrix v5.0 — Premium Dashboard JavaScript
+ * Theme toggle, auth, animated counters, toast notifications
  */
 
 const API_BASE_URL = window.location.origin;
 
-// State
+// ============ State ============
 let conversationHistory = [];
 let services = [];
 let config = null;
+let currentBusinessId = localStorage.getItem('businessId') || null;
+let authToken = localStorage.getItem('authToken') || null;
+
+// ============ Theme System ============
+
+function getTheme() {
+    return localStorage.getItem('theme') || 'dark';
+}
+
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    // Update meta theme-color
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = theme === 'dark' ? '#06060b' : '#f5f5fa';
+    // Update toggle icons
+    updateThemeIcons(theme);
+}
+
+function toggleTheme() {
+    const current = getTheme();
+    const next = current === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+}
+
+function updateThemeIcons(theme) {
+    // Landing toggle thumb icons
+    document.querySelectorAll('.moon-icon').forEach(el => {
+        el.style.display = theme === 'dark' ? '' : 'none';
+    });
+    document.querySelectorAll('.sun-icon').forEach(el => {
+        el.style.display = theme === 'light' ? '' : 'none';
+    });
+    // Sidebar toggle icons
+    document.querySelectorAll('.theme-icon-moon').forEach(el => {
+        el.style.display = theme === 'dark' ? '' : 'none';
+    });
+    document.querySelectorAll('.theme-icon-sun').forEach(el => {
+        el.style.display = theme === 'light' ? '' : 'none';
+    });
+}
+
+// ============ Toast Notifications ============
+
+function showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    const icons = {
+        success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+        error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+        info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+    };
+
+    toast.innerHTML = `
+        <span class="toast-icon">${icons[type] || icons.info}</span>
+        <span>${message}</span>
+        <button class="toast-close" onclick="this.parentElement.classList.add('toast-exit'); setTimeout(() => this.parentElement.remove(), 250);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+    `;
+
+    container.appendChild(toast);
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.classList.add('toast-exit');
+            setTimeout(() => toast.remove(), 250);
+        }
+    }, duration);
+}
+
+// ============ Animated Counter ============
+
+function animateCounter(element, target) {
+    const duration = 800;
+    const start = parseInt(element.textContent) || 0;
+    const diff = target - start;
+    if (diff === 0) return;
+
+    const startTime = performance.now();
+
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        // Ease-out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = Math.round(start + diff * eased);
+        element.textContent = current;
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        }
+    }
+
+    requestAnimationFrame(update);
+}
+
+// ============ API Headers ============
+
+function apiHeaders(extra = {}) {
+    const headers = { 'Content-Type': 'application/json', ...extra };
+    if (currentBusinessId) headers['X-Business-Id'] = currentBusinessId;
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    return headers;
+}
+
+function setBusinessContext(businessId, token) {
+    currentBusinessId = businessId;
+    authToken = token;
+    if (businessId) localStorage.setItem('businessId', businessId);
+    else localStorage.removeItem('businessId');
+    if (token) localStorage.setItem('authToken', token);
+    else localStorage.removeItem('authToken');
+}
+
+function clearAuth() {
+    setBusinessContext(null, null);
+}
+
+// ============ Auth ============
+
+function showAuth() {
+    document.getElementById('landing').classList.add('hidden');
+    document.querySelector('.app-container').classList.add('hidden');
+    document.getElementById('auth-page').classList.remove('hidden');
+    showAuthForm('signin');
+}
+
+function showAuthForm(form) {
+    document.getElementById('signin-form-wrap').classList.toggle('hidden', form !== 'signin');
+    document.getElementById('signup-form-wrap').classList.toggle('hidden', form !== 'signup');
+}
+
+async function handleSignIn(event) {
+    event.preventDefault();
+    const email = document.getElementById('signin-email').value;
+    const password = document.getElementById('signin-password').value;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/signin`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        const data = await response.json();
+        if (response.ok && data.access_token) {
+            setBusinessContext(data.business_id || null, data.access_token);
+            showToast('Signed in successfully!', 'success');
+            showDashboard();
+        } else {
+            showToast(data.detail || 'Sign in failed', 'error');
+        }
+    } catch (error) {
+        console.error('Sign in error:', error);
+        showToast('Connection error. Please try again.', 'error');
+    }
+}
+
+async function handleSignUp(event) {
+    event.preventDefault();
+    const name = document.getElementById('signup-name').value;
+    const email = document.getElementById('signup-email').value;
+    const password = document.getElementById('signup-password').value;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, full_name: name })
+        });
+        const data = await response.json();
+        if (response.ok && data.access_token) {
+            setBusinessContext(data.business_id || null, data.access_token);
+            showToast('Account created! Welcome to Receptrix.', 'success');
+            showDashboard();
+        } else {
+            showToast(data.detail || 'Sign up failed', 'error');
+        }
+    } catch (error) {
+        console.error('Sign up error:', error);
+        showToast('Connection error. Please try again.', 'error');
+    }
+}
 
 // ============ Initialization ============
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Apply saved theme
+    setTheme(getTheme());
+
     initNavigation();
     initChat();
-    // Dashboard data is loaded when user clicks "Open Dashboard" via showDashboard()
+
+    // Stagger feature card animations on landing
+    const featureCards = document.querySelectorAll('.feature-card');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry, index) => {
+            if (entry.isIntersecting) {
+                entry.target.style.animationDelay = `${index * 0.1}s`;
+                entry.target.style.animation = 'fadeInScale 0.5s ease-out forwards';
+                entry.target.style.opacity = '1';
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.1 });
+
+    featureCards.forEach(card => {
+        card.style.opacity = '0';
+        observer.observe(card);
+    });
 });
 
-// ============ Landing / Dashboard Toggle ============
+// ============ Landing / Dashboard / Auth Toggle ============
 
 function showDashboard() {
     document.getElementById('landing').classList.add('hidden');
+    document.getElementById('auth-page').classList.add('hidden');
     document.querySelector('.app-container').classList.remove('hidden');
     loadDashboardData();
     loadConfig();
@@ -29,6 +234,7 @@ function showDashboard() {
 
 function showLanding() {
     document.getElementById('landing').classList.remove('hidden');
+    document.getElementById('auth-page').classList.add('hidden');
     document.querySelector('.app-container').classList.add('hidden');
     window.scrollTo(0, 0);
 }
@@ -37,22 +243,19 @@ function showLanding() {
 
 function initNavigation() {
     const navItems = document.querySelectorAll('.nav-item');
-    
+
     navItems.forEach(item => {
         item.addEventListener('click', () => {
             const tab = item.dataset.tab;
-            
-            // Update active nav item
+
             navItems.forEach(nav => nav.classList.remove('active'));
             item.classList.add('active');
-            
-            // Show corresponding tab
+
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.remove('active');
             });
             document.getElementById(tab).classList.add('active');
-            
-            // Load data for specific tabs
+
             if (tab === 'appointments') loadAppointments();
             if (tab === 'calls') loadCallLogs();
             if (tab === 'settings') loadConfig();
@@ -64,28 +267,26 @@ function initNavigation() {
 
 async function loadDashboardData() {
     try {
-        // Load stats
-        const statsResponse = await fetch(`${API_BASE_URL}/stats`);
+        const statsResponse = await fetch(`${API_BASE_URL}/stats`, { headers: apiHeaders() });
         const stats = await statsResponse.json();
-        
-        document.getElementById('total-appointments').textContent = stats.total_appointments;
-        document.getElementById('today-appointments').textContent = stats.today_appointments;
-        document.getElementById('total-calls').textContent = stats.total_calls;
-        document.getElementById('completed-calls').textContent = stats.completed_calls;
-        
+
+        // Animate counters
+        animateCounter(document.getElementById('total-appointments'), stats.total_appointments);
+        animateCounter(document.getElementById('today-appointments'), stats.today_appointments);
+        animateCounter(document.getElementById('total-calls'), stats.total_calls);
+        animateCounter(document.getElementById('completed-calls'), stats.completed_calls);
+
         // Load today's schedule
         const today = new Date().toISOString().split('T')[0];
-        const appointmentsResponse = await fetch(`${API_BASE_URL}/appointments?date=${today}`);
+        const appointmentsResponse = await fetch(`${API_BASE_URL}/appointments?date=${today}`, { headers: apiHeaders() });
         const appointmentsData = await appointmentsResponse.json();
-        
         renderTodaysSchedule(appointmentsData.appointments);
-        
+
         // Load recent calls
-        const callsResponse = await fetch(`${API_BASE_URL}/calls?limit=5`);
+        const callsResponse = await fetch(`${API_BASE_URL}/calls?limit=5`, { headers: apiHeaders() });
         const callsData = await callsResponse.json();
-        
         renderRecentCalls(callsData.calls);
-        
+
     } catch (error) {
         console.error('Error loading dashboard:', error);
     }
@@ -93,12 +294,12 @@ async function loadDashboardData() {
 
 function renderTodaysSchedule(appointments) {
     const container = document.getElementById('todays-schedule');
-    
+
     if (!appointments || appointments.length === 0) {
         container.innerHTML = '<p class="empty-state">No appointments scheduled for today</p>';
         return;
     }
-    
+
     container.innerHTML = appointments.map(apt => `
         <div class="schedule-item">
             <span class="time">${formatTime(apt.appointment_time)}</span>
@@ -113,12 +314,12 @@ function renderTodaysSchedule(appointments) {
 
 function renderRecentCalls(calls) {
     const container = document.getElementById('recent-calls');
-    
+
     if (!calls || calls.length === 0) {
         container.innerHTML = '<p class="empty-state">No recent calls</p>';
         return;
     }
-    
+
     container.innerHTML = calls.map(call => `
         <div class="call-item">
             <div class="info">
@@ -134,9 +335,8 @@ function renderRecentCalls(calls) {
 
 async function loadAppointments() {
     try {
-        const response = await fetch(`${API_BASE_URL}/appointments`);
+        const response = await fetch(`${API_BASE_URL}/appointments`, { headers: apiHeaders() });
         const data = await response.json();
-        
         renderAppointmentsTable(data.appointments);
     } catch (error) {
         console.error('Error loading appointments:', error);
@@ -145,12 +345,12 @@ async function loadAppointments() {
 
 function renderAppointmentsTable(appointments) {
     const tbody = document.getElementById('appointments-table');
-    
+
     if (!appointments || appointments.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No appointments found</td></tr>';
         return;
     }
-    
+
     tbody.innerHTML = appointments.map(apt => `
         <tr>
             <td>${formatDate(apt.appointment_date)}</td>
@@ -170,18 +370,19 @@ function renderAppointmentsTable(appointments) {
 async function updateAppointmentStatus(id, status) {
     try {
         await fetch(`${API_BASE_URL}/appointments/${id}/status?status=${status}`, {
-            method: 'PATCH'
+            method: 'PATCH',
+            headers: apiHeaders()
         });
+        showToast(`Appointment ${status}`, status === 'confirmed' ? 'success' : 'info');
         loadAppointments();
         loadDashboardData();
     } catch (error) {
         console.error('Error updating appointment:', error);
-        alert('Failed to update appointment status');
+        showToast('Failed to update appointment', 'error');
     }
 }
 
 function filterAppointments() {
-    // Implement client-side filtering if needed
     loadAppointments();
 }
 
@@ -190,8 +391,7 @@ function filterAppointments() {
 function showNewAppointmentModal() {
     document.getElementById('appointment-modal').classList.add('show');
     loadServicesForModal();
-    
-    // Set minimum date to today
+
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('apt-date').min = today;
 }
@@ -203,10 +403,10 @@ function closeModal() {
 
 async function loadServicesForModal() {
     try {
-        const response = await fetch(`${API_BASE_URL}/services`);
+        const response = await fetch(`${API_BASE_URL}/services`, { headers: apiHeaders() });
         const data = await response.json();
         services = data.services;
-        
+
         const select = document.getElementById('apt-service');
         select.innerHTML = '<option value="">Select a service</option>' +
             services.map(s => `<option value="${s.name}">${s.name} - Rs.${s.price}</option>`).join('');
@@ -215,24 +415,23 @@ async function loadServicesForModal() {
     }
 }
 
-// Load available time slots when date changes
 document.getElementById('apt-date')?.addEventListener('change', async (e) => {
     const date = e.target.value;
     const service = document.getElementById('apt-service').value;
-    
+
     if (!date) return;
-    
+
     try {
-        const response = await fetch(`${API_BASE_URL}/appointments/availability?date=${date}&service=${service || ''}`);
+        const response = await fetch(`${API_BASE_URL}/appointments/availability?date=${date}&service=${service || ''}`, { headers: apiHeaders() });
         const data = await response.json();
-        
+
         const timeSelect = document.getElementById('apt-time');
-        
+
         if (!data.available || data.slots.length === 0) {
             timeSelect.innerHTML = '<option value="">No slots available</option>';
             return;
         }
-        
+
         timeSelect.innerHTML = '<option value="">Select a time</option>' +
             data.slots.map(slot => `<option value="${slot}">${formatTime(slot)}</option>`).join('');
     } catch (error) {
@@ -242,7 +441,7 @@ document.getElementById('apt-date')?.addEventListener('change', async (e) => {
 
 async function createAppointment(event) {
     event.preventDefault();
-    
+
     const data = {
         caller_name: document.getElementById('apt-name').value,
         caller_phone: document.getElementById('apt-phone').value,
@@ -251,27 +450,27 @@ async function createAppointment(event) {
         appointment_time: document.getElementById('apt-time').value,
         notes: document.getElementById('apt-notes').value
     };
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}/appointments`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: apiHeaders(),
             body: JSON.stringify(data)
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
-            alert('Appointment created successfully!');
+            showToast('Appointment created successfully!', 'success');
             closeModal();
             loadAppointments();
             loadDashboardData();
         } else {
-            alert('Failed to create appointment: ' + result.message);
+            showToast('Failed: ' + result.message, 'error');
         }
     } catch (error) {
         console.error('Error creating appointment:', error);
-        alert('Failed to create appointment');
+        showToast('Failed to create appointment', 'error');
     }
 }
 
@@ -279,9 +478,8 @@ async function createAppointment(event) {
 
 async function loadCallLogs() {
     try {
-        const response = await fetch(`${API_BASE_URL}/calls`);
+        const response = await fetch(`${API_BASE_URL}/calls`, { headers: apiHeaders() });
         const data = await response.json();
-        
         renderCallsTable(data.calls);
     } catch (error) {
         console.error('Error loading calls:', error);
@@ -290,22 +488,22 @@ async function loadCallLogs() {
 
 function renderCallsTable(calls) {
     const tbody = document.getElementById('calls-table');
-    
+
     if (!calls || calls.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No call logs found</td></tr>';
         return;
     }
-    
+
     tbody.innerHTML = calls.map(call => `
         <tr>
             <td>${formatDateTime(call.started_at)}</td>
             <td>${formatPhoneNumber(call.caller_phone)}</td>
             <td>${call.duration_seconds ? formatDuration(call.duration_seconds) : '-'}</td>
             <td><span class="status-badge status-${call.call_status}">${call.call_status}</span></td>
-            <td>${call.appointment_created ? '✅ Yes' : '-'}</td>
+            <td>${call.appointment_created ? '<span class="status-badge status-completed">Yes</span>' : '-'}</td>
             <td>
-                ${call.transcript ? 
-                    `<button class="btn-outline btn-small" onclick="showTranscript('${encodeURIComponent(call.transcript)}')">View</button>` : 
+                ${call.transcript ?
+                    `<button class="btn-outline btn-small" onclick="showTranscript('${encodeURIComponent(call.transcript)}')">View</button>` :
                     '-'}
             </td>
         </tr>
@@ -322,9 +520,8 @@ function closeTranscriptModal() {
     document.getElementById('transcript-modal').classList.remove('show');
 }
 
-// ============ Chat ============
+// ============ Chat / Voice ============
 
-// Voice state
 let isVoiceModeActive = false;
 let isListening = false;
 let isCallActive = false;
@@ -336,38 +533,34 @@ let synthesis = window.speechSynthesis;
 function initChat() {
     const sendButton = document.getElementById('send-button');
     const messageInput = document.getElementById('message-input');
-    
+
     if (sendButton && messageInput) {
         sendButton.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
     }
-    
-    // Initialize speech recognition if available
+
     initSpeechRecognition();
 }
 
 function initSpeechRecognition() {
-    const voiceStatus = document.getElementById('voice-status');
     const voiceHint = document.getElementById('voice-hint');
-    
+
     if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
         recognition.continuous = true;
-        console.log('Speech recognition initialized successfully');
         recognition.interimResults = true;
         recognition.lang = 'en-US';
-        
+
         recognition.onstart = () => {
             isListening = true;
             updateMicButton(true);
-            document.getElementById('voice-status').textContent = '🎤 Listening...';
+            document.getElementById('voice-status').textContent = 'Listening...';
         };
-        
+
         recognition.onresult = (event) => {
-            // Only look at the latest result
             const lastResult = event.results[event.results.length - 1];
             const transcript = lastResult[0].transcript.trim();
 
@@ -379,46 +572,34 @@ function initSpeechRecognition() {
                 sendMessage();
             }
         };
-        
+
         recognition.onerror = (event) => {
-            console.error('Speech recognition error:', event.error, event);
+            console.error('Speech recognition error:', event.error);
             isListening = false;
             updateMicButton(false);
-            if (event.error === 'not-allowed') {
-                document.getElementById('voice-status').textContent = 'Microphone blocked — click the lock icon in the address bar and allow microphone access, then reload.';
-            } else if (event.error === 'no-speech') {
-                document.getElementById('voice-status').textContent = 'No speech detected. Click 🎤 and try again.';
-            } else if (event.error === 'network') {
-                document.getElementById('voice-status').textContent = 'Network error — speech recognition requires internet (Chrome sends audio to Google servers).';
-            } else {
-                document.getElementById('voice-status').textContent = 'Speech error: ' + event.error + '. Try again.';
-            }
+            const statusMessages = {
+                'not-allowed': 'Microphone blocked. Allow access in browser settings.',
+                'no-speech': 'No speech detected. Try again.',
+                'network': 'Network error. Speech recognition requires internet.'
+            };
+            document.getElementById('voice-status').textContent =
+                statusMessages[event.error] || 'Speech error: ' + event.error;
         };
-        
+
         recognition.onend = () => {
             isListening = false;
             updateMicButton(false);
             if (isVoiceModeActive && isCallActive) {
-                document.getElementById('voice-status').textContent = '🎤 Click microphone to continue speaking';
+                document.getElementById('voice-status').textContent = 'Click microphone to continue speaking';
             } else {
                 document.getElementById('voice-status').textContent = 'Click microphone to speak';
             }
         };
-        
-        if (voiceHint) {
-            voiceHint.textContent = '💡 Voice enabled! Click 🎤 to speak or type your message';
-        }
     } else {
-        console.log('Speech recognition not supported');
         const micBtn = document.getElementById('mic-button');
-        if (micBtn) {
-            micBtn.style.display = 'none';
-        }
+        if (micBtn) micBtn.style.display = 'none';
         if (voiceHint) {
-            voiceHint.innerHTML = '⚠️ <strong>Voice not supported</strong> - Please use <a href="https://www.google.com/chrome/" target="_blank">Chrome</a> or Edge for voice features. You can still type messages!';
-        }
-        if (voiceStatus) {
-            voiceStatus.textContent = 'Voice requires Chrome or Edge browser';
+            voiceHint.textContent = 'Voice not supported. Use Chrome or Edge for voice features.';
         }
     }
 }
@@ -427,32 +608,29 @@ function updateMicButton(listening) {
     const micBtn = document.getElementById('mic-button');
     if (micBtn) {
         micBtn.classList.toggle('listening', listening);
-        micBtn.textContent = listening ? '🔴' : '🎤';
     }
 }
 
 async function toggleListening() {
     if (!recognition) {
-        alert('Speech recognition is not supported in your browser.\n\nPlease use Chrome or Edge for voice features.\n\nYou can still type messages below!');
+        showToast('Speech recognition not supported. Use Chrome or Edge.', 'error');
         return;
     }
 
     try {
         if (isListening) {
             recognition.stop();
-            // Stop audio monitoring
             if (window._micStream) {
                 window._micStream.getTracks().forEach(t => t.stop());
                 window._micStream = null;
             }
         } else {
-            document.getElementById('voice-status').textContent = '🎤 Starting microphone...';
-            // Request mic permission before starting recognition
+            document.getElementById('voice-status').textContent = 'Starting microphone...';
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 stream.getTracks().forEach(t => t.stop());
             } catch (micErr) {
-                document.getElementById('voice-status').textContent = 'Microphone access denied. Please allow microphone in browser settings.';
+                document.getElementById('voice-status').textContent = 'Microphone access denied.';
                 return;
             }
 
@@ -473,14 +651,14 @@ function toggleVoiceMode() {
     isVoiceModeActive = !isVoiceModeActive;
     const btn = document.getElementById('voice-mode-btn');
     const status = document.getElementById('voice-status');
-    
+
     if (isVoiceModeActive) {
         btn.classList.add('active');
-        btn.innerHTML = '<span class="voice-icon">🎤</span><span>Voice Mode Active</span>';
+        btn.querySelector('span:last-child').textContent = 'Voice Mode Active';
         status.textContent = 'AI will speak responses. Click "Start Call" to begin!';
     } else {
         btn.classList.remove('active');
-        btn.innerHTML = '<span class="voice-icon">🎤</span><span>Enable Voice Mode</span>';
+        btn.querySelector('span:last-child').textContent = 'Enable Voice Mode';
         status.textContent = 'Click to start voice conversation';
         synthesis.cancel();
     }
@@ -489,25 +667,21 @@ function toggleVoiceMode() {
 function startCall() {
     isCallActive = true;
     callStartTime = Date.now();
-    
+
     document.getElementById('start-call-btn').style.display = 'none';
-    document.getElementById('end-call-btn').style.display = 'inline-block';
-    document.getElementById('voice-status').textContent = '📞 Call in progress...';
-    
-    // Start timer
+    document.getElementById('end-call-btn').style.display = 'inline-flex';
+    document.getElementById('voice-status').textContent = 'Call in progress...';
+
     callTimer = setInterval(updateCallDuration, 1000);
-    
-    // Clear previous conversation
+
     conversationHistory = [];
     const container = document.getElementById('chat-container');
     container.innerHTML = '';
-    
-    // AI greeting
+
     const greeting = "Thank you for calling. My name is Sarah, how may I assist you today?";
     addChatMessage(greeting, false, 'AI Receptionist');
     speakText(greeting);
-    
-    // Auto-enable voice mode
+
     if (!isVoiceModeActive) {
         toggleVoiceMode();
     }
@@ -515,115 +689,108 @@ function startCall() {
 
 function endCall() {
     isCallActive = false;
-    
-    document.getElementById('start-call-btn').style.display = 'inline-block';
+
+    document.getElementById('start-call-btn').style.display = 'inline-flex';
     document.getElementById('end-call-btn').style.display = 'none';
-    document.getElementById('voice-status').textContent = 'Call ended. Click "Start Call" to begin a new call.';
-    
+    document.getElementById('voice-status').textContent = 'Call ended.';
+
     if (callTimer) {
         clearInterval(callTimer);
         callTimer = null;
     }
-    
+
     synthesis.cancel();
     if (isListening && recognition) {
         recognition.stop();
     }
-    
-    // Goodbye message
+
     addChatMessage("Thank you for calling. Have a great day!", false, 'AI Receptionist');
 }
 
 function updateCallDuration() {
     if (!callStartTime) return;
-    
+
     const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
     const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
     const secs = (elapsed % 60).toString().padStart(2, '0');
-    
+
     document.getElementById('call-duration').textContent = `${mins}:${secs}`;
 }
 
 function speakText(text) {
     if (!synthesis) return;
-    
+
     synthesis.cancel();
-    
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.95;
     utterance.pitch = 1.1;
     utterance.volume = 1;
-    
-    // Try to find a good voice
+
     const voices = synthesis.getVoices();
-    const preferredVoice = voices.find(v => 
-        v.name.includes('Female') || 
-        v.name.includes('Samantha') || 
+    const preferredVoice = voices.find(v =>
+        v.name.includes('Female') ||
+        v.name.includes('Samantha') ||
         v.name.includes('Google UK English Female') ||
         v.name.includes('Microsoft Zira')
     ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
-    
+
     if (preferredVoice) {
         utterance.voice = preferredVoice;
     }
-    
+
     utterance.onstart = () => {
-        document.getElementById('voice-status').textContent = '🔊 AI is speaking...';
+        document.getElementById('voice-status').textContent = 'AI is speaking...';
     };
-    
+
     utterance.onend = () => {
         if (isCallActive && isVoiceModeActive) {
-            document.getElementById('voice-status').textContent = '🎤 Your turn to speak... (click 🎤)';
-            // Auto-start listening after AI speaks
+            document.getElementById('voice-status').textContent = 'Your turn to speak...';
             setTimeout(() => {
                 if (isCallActive && recognition && !isListening) {
                     try {
                         recognition.start();
                     } catch (e) {
-                        console.warn('Auto-restart blocked, user must click mic:', e);
-                        document.getElementById('voice-status').textContent = '🎤 Click microphone to continue speaking';
+                        document.getElementById('voice-status').textContent = 'Click microphone to continue speaking';
                     }
                 }
             }, 500);
         }
     };
-    
+
     synthesis.speak(utterance);
 }
 
 async function sendMessage() {
     const input = document.getElementById('message-input');
     const message = input.value.trim();
-    
+
     if (!message) return;
-    
-    // Add user message
+
     addChatMessage(message, true, 'You');
     input.value = '';
-    
-    // Add to conversation history
+
     conversationHistory.push({ role: 'user', content: message });
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}/chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: apiHeaders(),
             body: JSON.stringify({
                 message: message,
                 conversation_history: conversationHistory
             })
         });
-        
+
         const data = await response.json();
-        
+
         addChatMessage(data.message, false, 'AI Receptionist');
         conversationHistory.push({ role: 'assistant', content: data.message });
-        
-        // Speak the response if voice mode is active
+
         if (isVoiceModeActive) {
             speakText(data.message);
         }
-        
+
     } catch (error) {
         console.error('Error sending message:', error);
         addChatMessage('Sorry, I encountered an error. Please try again.', false, 'AI Receptionist');
@@ -634,54 +801,50 @@ function addChatMessage(content, isUser, senderName = '') {
     const container = document.getElementById('chat-container');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isUser ? 'user-message' : 'receptionist-message'}`;
-    
-    const avatar = document.createElement('div');
-    avatar.className = 'message-avatar';
-    avatar.textContent = isUser ? '👤' : '🤖';
-    
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-    contentDiv.innerHTML = `<strong>${senderName}</strong><p>${content}</p>`;
-    
-    messageDiv.appendChild(avatar);
-    messageDiv.appendChild(contentDiv);
+
+    const avatarSvg = isUser
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>';
+
+    messageDiv.innerHTML = `
+        <div class="message-avatar">${avatarSvg}</div>
+        <div class="message-content">
+            <strong>${senderName}</strong>
+            <p>${content}</p>
+        </div>
+    `;
+
     container.appendChild(messageDiv);
-    
     container.scrollTop = container.scrollHeight;
 }
 
-// Load voices when available
+// Load voices
 if (synthesis) {
-    synthesis.onvoiceschanged = () => {
-        synthesis.getVoices();
-    };
+    synthesis.onvoiceschanged = () => synthesis.getVoices();
 }
 
 // ============ Settings ============
 
 async function loadConfig() {
     try {
-        const response = await fetch(`${API_BASE_URL}/config`);
+        const response = await fetch(`${API_BASE_URL}/config`, { headers: apiHeaders() });
         config = await response.json();
-        
-        // Business info
+
         document.getElementById('config-name').textContent = config.business_name;
         document.getElementById('config-phone').textContent = config.contact_info.phone;
         document.getElementById('config-email').textContent = config.contact_info.email;
         document.getElementById('config-address').textContent = config.contact_info.address;
-        
-        // Working hours
+
         const hoursHtml = Object.entries(config.working_hours)
             .map(([day, hours]) => `<p><strong>${capitalize(day)}:</strong> ${hours}</p>`)
             .join('');
         document.getElementById('working-hours').innerHTML = hoursHtml;
-        
-        // Services
+
         const servicesHtml = config.services
             .map(s => `<p><strong>${s.name}:</strong> Rs.${s.price} (${s.duration} min)</p>`)
             .join('');
         document.getElementById('services-list').innerHTML = servicesHtml;
-        
+
     } catch (error) {
         console.error('Error loading config:', error);
     }
@@ -691,10 +854,10 @@ async function loadConfig() {
 
 function formatDate(dateStr) {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-PK', { 
-        weekday: 'short', 
-        month: 'short', 
-        day: 'numeric' 
+    return date.toLocaleDateString('en-PK', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
     });
 }
 
@@ -727,18 +890,9 @@ function formatDuration(seconds) {
 
 function formatPhoneNumber(phone) {
     if (!phone) return '';
-    // Simple formatting for Pakistani numbers
     return phone.replace(/^\+92/, '+92 ').replace(/(\d{3})(\d{7})$/, '$1 $2');
 }
 
 function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function getCurrentTime() {
-    return new Date().toLocaleTimeString('en-PK', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-    });
 }

@@ -107,3 +107,12 @@ def get_voice_provider() -> str:
     return os.getenv("VOICE_PROVIDER", "signalwire").lower()
 
 
+def get_supabase_config() -> dict:
+    """Get Supabase configuration from environment."""
+    return {
+        "url": os.getenv("SUPABASE_URL", ""),
+        "service_role_key": os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
+        "anon_key": os.getenv("SUPABASE_ANON_KEY", "")
+    }
+
+

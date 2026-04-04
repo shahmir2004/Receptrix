@@ -1,6 +1,9 @@
 """
 Twilio Integration for AI Voice Receptionist.
 Handles incoming calls, speech recognition, and text-to-speech.
+
+Phase D: Resolves business_id from the provider phone number (To field)
+and threads it through all voice handler / database calls.
 """
 import os
 from typing import Optional
@@ -9,49 +12,67 @@ from twilio.twiml.voice_response import VoiceResponse, Gather
 from datetime import datetime
 
 from database import (
-    create_call_log, update_call_log, 
+    create_call_log, update_call_log,
     delete_conversation_state, get_conversation_state,
     CallStatus
 )
 from voice_handler import get_voice_handler
+from tenant import resolve_business_from_phone
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class TwilioService:
     """Service for Twilio voice operations."""
-    
+
     def __init__(self):
         self.account_sid = os.getenv("TWILIO_ACCOUNT_SID")
         self.auth_token = os.getenv("TWILIO_AUTH_TOKEN")
         self.phone_number = os.getenv("TWILIO_PHONE_NUMBER")
         self.server_url = os.getenv("SERVER_URL", "http://localhost:8000")
-        
+
         if self.account_sid and self.auth_token:
             self.client = Client(self.account_sid, self.auth_token)
         else:
             self.client = None
-            print("Warning: Twilio credentials not configured")
-    
-    def handle_incoming_call(self, call_sid: str, caller_phone: str) -> str:
+            logger.warning("Twilio credentials not configured")
+
+    def _resolve_business(self, to_number: Optional[str] = None) -> Optional[str]:
+        """Resolve business_id from the provider phone number."""
+        if to_number:
+            business_id = resolve_business_from_phone(to_number)
+            if business_id:
+                return business_id
+        # Fallback: try the configured Twilio phone number
+        if self.phone_number:
+            return resolve_business_from_phone(self.phone_number)
+        return None
+
+    def handle_incoming_call(self, call_sid: str, caller_phone: str, to_number: Optional[str] = None) -> str:
         """
         Handle incoming call and return TwiML response.
-        
+
         Args:
             call_sid: Twilio call SID
             caller_phone: Caller's phone number
-            
+            to_number: The Twilio phone number that received the call
+
         Returns:
             TwiML XML string
         """
+        business_id = self._resolve_business(to_number)
+
         # Log the call
-        create_call_log(call_sid, caller_phone)
-        
+        create_call_log(call_sid, caller_phone, business_id=business_id)
+
         # Get AI greeting
-        voice_handler = get_voice_handler()
+        voice_handler = get_voice_handler(business_id=business_id)
         greeting = voice_handler.get_greeting(caller_phone, call_sid)
-        
+
         # Build TwiML response
         response = VoiceResponse()
-        
+
         # Create gather for speech input
         gather = Gather(
             input='speech',
@@ -62,49 +83,52 @@ class TwilioService:
             timeout=5,
             speech_model='phone_call'
         )
-        
+
         # Say the greeting with natural voice
         gather.say(
             greeting,
             voice='Polly.Joanna',  # Natural female voice
             language='en-US'
         )
-        
+
         response.append(gather)
-        
+
         # If no input, prompt again
         response.redirect('/voice/no-input')
-        
+
         return str(response)
-    
-    def handle_speech_input(self, call_sid: str, caller_phone: str, speech_result: str) -> str:
+
+    def handle_speech_input(self, call_sid: str, caller_phone: str, speech_result: str, to_number: Optional[str] = None) -> str:
         """
         Handle speech input from caller and generate response.
-        
+
         Args:
             call_sid: Twilio call SID
             caller_phone: Caller's phone number
             speech_result: Transcribed speech from caller
-            
+            to_number: The Twilio phone number
+
         Returns:
             TwiML XML string
         """
+        business_id = self._resolve_business(to_number)
+
         # Update call status (ignore if call doesn't exist)
         try:
             update_call_log(call_sid, call_status=CallStatus.IN_PROGRESS)
         except Exception as e:
-            print(f"Could not update call log: {e}")
-        
+            logger.error("Could not update call log: %s", e)
+
         # Get AI response
-        voice_handler = get_voice_handler()
+        voice_handler = get_voice_handler(business_id=business_id)
         ai_response = voice_handler.generate_response(
-            speech_result,
-            call_sid,
-            caller_phone
+            caller_input=speech_result,
+            call_sid=call_sid,
+            caller_phone=caller_phone
         )
-        
+
         response = VoiceResponse()
-        
+
         if ai_response.should_end_call:
             # End the call gracefully
             response.say(
@@ -113,14 +137,14 @@ class TwilioService:
                 language='en-US'
             )
             response.hangup()
-            
+
             # Update call log
             update_call_log(
                 call_sid,
                 call_status=CallStatus.COMPLETED,
                 ended_at=datetime.now()
             )
-            
+
             # Get final transcript
             conv_state = get_conversation_state(call_sid)
             if conv_state:
@@ -138,29 +162,29 @@ class TwilioService:
                 timeout=8,
                 speech_model='phone_call'
             )
-            
+
             gather.say(
                 ai_response.text,
                 voice='Polly.Joanna',
                 language='en-US'
             )
-            
+
             response.append(gather)
-            
+
             # Handle silence
             response.redirect('/voice/no-input')
-        
+
         return str(response)
-    
+
     def handle_no_input(self, call_sid: str, caller_phone: str) -> str:
         """
         Handle when caller doesn't respond.
-        
+
         Returns:
             TwiML XML string
         """
         response = VoiceResponse()
-        
+
         gather = Gather(
             input='speech',
             action='/voice/respond',
@@ -170,15 +194,15 @@ class TwilioService:
             timeout=5,
             speech_model='phone_call'
         )
-        
+
         gather.say(
             "I'm sorry, I didn't catch that. Could you please repeat?",
             voice='Polly.Joanna',
             language='en-US'
         )
-        
+
         response.append(gather)
-        
+
         # After second silence, end call
         response.say(
             "I'm sorry, I'm having trouble hearing you. Please call back when you're ready. Goodbye!",
@@ -186,9 +210,9 @@ class TwilioService:
             language='en-US'
         )
         response.hangup()
-        
+
         return str(response)
-    
+
     def handle_call_status(self, call_sid: str, call_status: str) -> None:
         """Handle call status webhook."""
         status_map = {
@@ -198,18 +222,18 @@ class TwilioService:
             "no-answer": CallStatus.MISSED,
             "canceled": CallStatus.MISSED
         }
-        
+
         db_status = status_map.get(call_status.lower(), CallStatus.COMPLETED)
-        
+
         update_call_log(
             call_sid,
             call_status=db_status,
             ended_at=datetime.now()
         )
-        
+
         # Cleanup conversation state
         delete_conversation_state(call_sid)
-    
+
     def _build_transcript(self, messages: list) -> str:
         """Build transcript from conversation messages."""
         transcript_lines = []
@@ -217,22 +241,22 @@ class TwilioService:
             role = "Caller" if msg["role"] == "user" else "Receptionist"
             transcript_lines.append(f"{role}: {msg['content']}")
         return "\n".join(transcript_lines)
-    
+
     def make_outbound_call(self, to_number: str, message: str) -> Optional[str]:
         """
         Make an outbound call (for reminders, etc.)
-        
+
         Args:
             to_number: Phone number to call
             message: Message to speak
-            
+
         Returns:
             Call SID or None if failed
         """
         if not self.client:
-            print("Twilio client not configured")
+            logger.warning("Twilio client not configured")
             return None
-        
+
         try:
             # Create TwiML for outbound message
             twiml = f'''
@@ -242,34 +266,34 @@ class TwilioService:
                 <Say voice="Polly.Joanna" language="en-US">Goodbye!</Say>
             </Response>
             '''
-            
+
             call = self.client.calls.create(
                 to=to_number,
                 from_=self.phone_number,
                 twiml=twiml
             )
-            
+
             return call.sid
-            
+
         except Exception as e:
-            print(f"Outbound call error: {e}")
+            logger.error("Outbound call error: %s", e)
             return None
-    
+
     def send_sms(self, to_number: str, message: str) -> bool:
         """
         Send an SMS message.
-        
+
         Args:
             to_number: Phone number to send to
             message: Message content
-            
+
         Returns:
             True if sent successfully
         """
         if not self.client:
-            print("Twilio client not configured")
+            logger.warning("Twilio client not configured")
             return False
-        
+
         try:
             self.client.messages.create(
                 to=to_number,
@@ -278,7 +302,7 @@ class TwilioService:
             )
             return True
         except Exception as e:
-            print(f"SMS error: {e}")
+            logger.error("SMS error: %s", e)
             return False
 
 

@@ -23,5 +23,11 @@ pytz>=2023.3
 # Optional: For production deployment
 gunicorn>=21.2.0
 
+# Supabase (Phase A+)
+supabase>=2.3.0
+
+# Rate limiting (Phase H)
+slowapi>=0.1.9
+
 
 
