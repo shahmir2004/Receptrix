@@ -277,6 +277,7 @@ async def auth_signup(request: Request, response: Response, req: SignUpRequest):
         business = create_business_for_user(
             user_id=result["user_id"],
             business_name=req.business_name,
+            email=req.email,
         )
         result["businesses"] = [
             {

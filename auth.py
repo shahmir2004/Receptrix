@@ -304,6 +304,41 @@ def _try_auto_link_user_to_business(user_id: str, email: str) -> list[dict[str, 
     return _list_memberships(user_id)
 
 
+def _derive_default_business_name(full_name: str, email: str) -> str:
+    preferred = (full_name or "").strip()
+    if len(preferred) >= 2:
+        return f"{preferred}'s Business"
+
+    local = ((email or "").split("@")[0] if email else "").strip()
+    local = re.sub(r"[^a-zA-Z0-9]+", " ", local).strip().title()
+    if len(local) >= 2:
+        return f"{local} Business"
+
+    return "My Business"
+
+
+def _ensure_business_membership_context(user_id: str, email: str, full_name: str = "") -> list[dict[str, Any]]:
+    """Ensure a signed-in user always has at least one business membership context."""
+    memberships = _list_memberships(user_id)
+    if memberships:
+        return memberships
+
+    memberships = _try_auto_link_user_to_business(user_id, email)
+    if memberships:
+        return memberships
+
+    try:
+        create_business_for_user(
+            user_id=user_id,
+            business_name=_derive_default_business_name(full_name, email),
+            email=email,
+        )
+    except Exception:
+        return _list_memberships(user_id)
+
+    return _list_memberships(user_id)
+
+
 # ============ JWT / Current User ============
 
 def get_current_user_id(request: Request) -> Optional[str]:
@@ -426,14 +461,15 @@ def sign_in(email: str, password: str) -> dict[str, Any]:
 
     user_id = str(result.user.id)
     _ensure_profile_exists(user_id)
+    metadata = getattr(result.user, "user_metadata", {}) or {}
 
-    memberships = _list_memberships(user_id)
-    if not memberships:
-        memberships = _try_auto_link_user_to_business(user_id, result.user.email or normalized_email)
+    memberships = _ensure_business_membership_context(
+        user_id=user_id,
+        email=result.user.email or normalized_email,
+        full_name=metadata.get("full_name", ""),
+    )
 
     current_business_id = memberships[0]["business_id"] if memberships else None
-
-    metadata = getattr(result.user, "user_metadata", {}) or {}
     return {
         "user_id": user_id,
         "email": result.user.email,
@@ -505,10 +541,19 @@ def create_business_for_user(
         "sunday": "Closed",
     }
 
+    resolved_email = (email or "").strip()
+    if not resolved_email:
+        try:
+            profile_lookup = sb.table("profiles").select("email").eq("id", user_id).limit(1).execute()
+            if profile_lookup.data and profile_lookup.data[0].get("email"):
+                resolved_email = str(profile_lookup.data[0]["email"]).strip().lower()
+        except Exception:
+            resolved_email = ""
+
     biz_data = {
         "name": _normalize_business_name(business_name),
         "phone": (phone or "").strip(),
-        "email": (email or "").strip(),
+        "email": resolved_email,
         "address": (address or "").strip(),
         "timezone": (timezone or "Asia/Karachi").strip() or "Asia/Karachi",
         "greeting_message": (greeting_message or "").strip()
@@ -583,9 +628,14 @@ def get_user_profile(user_id: str) -> dict[str, Any]:
         profile_result = sb.table("profiles").select("*").eq("id", user_id).limit(1).execute()
         profile = profile_result.data[0] if profile_result.data else None
 
-    businesses = _list_memberships(user_id)
-    if not businesses and profile and profile.get("email"):
-        businesses = _try_auto_link_user_to_business(user_id, profile["email"])
+    if profile and profile.get("email"):
+        businesses = _ensure_business_membership_context(
+            user_id=user_id,
+            email=profile["email"],
+            full_name=profile.get("full_name", ""),
+        )
+    else:
+        businesses = _list_memberships(user_id)
 
     return {
         "user_id": user_id,
