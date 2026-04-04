@@ -1,717 +1,603 @@
-# 🤖 Receptrix - AI Voice Receptionist# 📞 Receptrix - AI Voice Receptionist# AI Receptionist MVP
+# Receptrix
 
+An AI-powered multi-tenant voice receptionist platform. Handles inbound phone calls via Twilio or SignalWire, books appointments through natural conversation, and provides a web chat interface — all backed by Supabase PostgreSQL and configurable per business.
 
+---
 
-An autonomous AI-powered voice receptionist system that handles phone calls, manages appointments, and provides intelligent customer service for any business.
+## Table of Contents
 
+- [Architecture Overview](#architecture-overview)
+- [System Diagrams](#system-diagrams)
+- [Module Reference](#module-reference)
+- [Data Model](#data-model)
+- [Authentication & Multi-Tenancy](#authentication--multi-tenancy)
+- [AI Provider System](#ai-provider-system)
+- [Voice Call Flow](#voice-call-flow)
+- [Web Chat Flow](#web-chat-flow)
+- [API Reference](#api-reference)
+- [Configuration](#configuration)
+- [Setup & Running](#setup--running)
+- [Deployment](#deployment)
 
+---
 
-![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)An autonomous AI-powered receptionist that handles phone calls, schedules appointments, and manages your business communications automatically.A generic, production-style AI-powered virtual receptionist system built with Python FastAPI, Ollama (Llama 3), SQLite, and vanilla JavaScript.
+## Architecture Overview
 
-![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-green.svg)
+Receptrix is a Python/FastAPI server with three main concerns:
 
-![Twilio](https://img.shields.io/badge/Twilio-Voice-red.svg)
+| Concern | Entry Point | Backing |
+|---|---|---|
+| Voice calls | `/voice/incoming`, `/voice/respond` | Twilio or SignalWire webhooks |
+| Web chat | `/chat` | Browser → REST API |
+| Management | `/business/*`, `/auth/*` | JWT-authenticated REST API |
 
-![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+All data is stored in **Supabase PostgreSQL**. The backend uses the service-role key and bypasses Row Level Security — RLS policies exist for a future browser-direct client path.
 
-## ✨ Features## Overview
+Business configuration (name, hours, services) is loaded per-tenant from Supabase and cached in-process for 5 minutes.
 
-## ✨ Features
+---
 
+## System Diagrams
 
-
-- **🎙️ Voice Call Handling** - Answers incoming calls via Twilio with natural AI conversation
-
-- **📅 Appointment Management** - Books, reschedules, and cancels appointments automatically- **🤖 AI Voice Handling**: Natural conversation with callers using OpenAI GPTThis system acts as a virtual receptionist that can:
-
-- **🧠 Multi-AI Provider Support** - Works with Groq (free), OpenAI, HuggingFace, or Ollama
-
-- **📊 Real-time Dashboard** - Web interface to monitor calls, appointments, and statistics- **📞 Phone Integration**: Twilio-powered phone call handling with speech-to-text- Handle customer conversations via chat
-
-- **🌍 Timezone Aware** - Configurable business hours and timezone support
-
-- **💾 Persistent Storage** - SQLite database for all appointments, callers, and call logs- **📅 Smart Scheduling**: Automatic appointment booking with conflict detection- Answer business FAQs
-
-- **🔄 Conflict Detection** - Prevents double-booking with smart availability checking
-
-- **👤 Caller Recognition**: Remembers returning callers by phone number- Provide service information and pricing
-
-## 🏗️ Architecture
-
-- **📊 Dashboard**: Web interface to manage appointments and view call logs- Share working hours and contact information
-
-```
-
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐- **💬 Chat Interface**: Test the AI receptionist via web chat- Process appointment bookings
-
-│   Phone Call    │────▶│     Twilio      │────▶│   FastAPI App   │
-
-│   (Customer)    │     │   (Voice API)   │     │   (Webhooks)    │- **🇵🇰 Pakistan Optimized**: Configured for PKT timezone and local phone numbers- Store bookings in a database
-
-└─────────────────┘     └─────────────────┘     └────────┬────────┘
-
-                                                         │
-
-                        ┌────────────────────────────────┼────────────────────────────────┐
-
-                        │                                ▼                                │## 🚀 Quick Start## Tech Stack
-
-                        │  ┌─────────────────┐   ┌─────────────────┐   ┌──────────────┐  │
-
-                        │  │  Voice Handler  │──▶│   AI Provider   │   │   Database   │  │
-
-                        │  │  (Conversation) │   │ (Groq/OpenAI)   │   │   (SQLite)   │  │
-
-                        │  └─────────────────┘   └─────────────────┘   └──────────────┘  │### Prerequisites- **Backend**: Python 3.8+ with FastAPI
-
-                        │                                                                 │
-
-                        │                    Receptrix Server                             │- **AI**: Ollama with Llama 3 model
-
-                        └─────────────────────────────────────────────────────────────────┘
-
-```- Python 3.9+- **Database**: SQLite
-
-
-
-## 📁 Project Structure- Twilio Account (for phone calls)- **Frontend**: HTML, CSS, Vanilla JavaScript
-
-
-
-```- OpenAI API Key (for AI responses)- **Configuration**: JSON file
-
-Receptrix/
-
-├── main.py              # FastAPI application & API endpoints- ngrok or public server (for Twilio webhooks)
-
-├── voice_handler.py     # AI conversation handler for voice calls
-
-├── twilio_service.py    # Twilio integration & TwiML generation## Prerequisites
-
-├── receptionist.py      # Core receptionist AI logic
-
-├── database.py          # SQLite database operations### Installation
-
-├── models.py            # Pydantic data models
-
-├── config.py            # Configuration management1. **Python 3.8 or higher**
-
-├── business_config.json # Business settings (hours, services, etc.)
-
-├── index.html           # Dashboard frontend1. **Clone and navigate to the project:**   ```bash
-
-├── style.css            # Dashboard styling
-
-├── script.js            # Dashboard JavaScript   ```bash   python --version
-
-├── requirements.txt     # Python dependencies
-
-├── Procfile             # Render deployment config   cd Receptrix   ```
-
-├── render.yaml          # Render service definition
-
-├── runtime.txt          # Python version specification   ```
-
-├── .env.example         # Environment variables template
-
-└── README.md            # This file2. **Ollama installed and running**
+### High-Level Architecture
 
 ```
-
-2. **Create a virtual environment:**   - Download from: https://ollama.ai/
-
-## 🚀 Quick Start
-
-   ```bash   - Install Ollama on your system
-
-### Prerequisites
-
-   python -m venv venv   - Pull the Llama 3 model:
-
-- Python 3.11+
-
-- Twilio Account (for phone calls)        ```bash
-
-- Groq API Key (free) or OpenAI API Key
-
-   # Windows     ollama pull llama3
-
-### 1. Clone the Repository
-
-   venv\Scripts\activate     ```
-
-```bash
-
-git clone https://github.com/shahmir2004/Receptrix.git      - Verify Ollama is running:
-
-cd Receptrix
-
-```   # Linux/Mac     ```bash
-
-
-
-### 2. Create Virtual Environment   source venv/bin/activate     ollama list
-
-
-
-```bash   ```     ```
-
-python -m venv venv
-
-
-
-# Windows
-
-venv\Scripts\activate3. **Install dependencies:**## Installation
-
-
-
-# Linux/Mac   ```bash
-
-source venv/bin/activate
-
-```   pip install -r requirements.txt1. **Clone or navigate to the project directory**
-
-
-
-### 3. Install Dependencies   ```   ```bash
-
-
-
-```bash   cd Receptrix
-
-pip install -r requirements.txt
-
-```4. **Create your `.env` file:**   ```
-
-
-
-### 4. Configure Environment Variables   ```bash
-
-
-
-Copy the example environment file and fill in your credentials:   copy .env.example .env2. **Create a virtual environment (recommended)**
-
-
-
-```bash   ```   ```bash
-
-cp .env.example .env
-
-```   python -m venv venv
-
-
-
-Edit `.env` with your settings:5. **Edit `.env` with your credentials:**   
-
-
-
-```env   ```env   # On Windows:
-
-# AI Provider (groq, openai, huggingface, ollama)
-
-AI_PROVIDER=groq   # Twilio Configuration   venv\Scripts\activate
-
-GROQ_API_KEY=your-groq-api-key
-
-   TWILIO_ACCOUNT_SID=your_account_sid   
-
-# Twilio Credentials
-
-TWILIO_ACCOUNT_SID=your-twilio-sid   TWILIO_AUTH_TOKEN=your_auth_token   # On macOS/Linux:
-
-TWILIO_AUTH_TOKEN=your-twilio-token
-
-TWILIO_PHONE_NUMBER=+1234567890   TWILIO_PHONE_NUMBER=+1234567890   source venv/bin/activate
-
-
-
-# Business Settings      ```
-
-BUSINESS_NAME=Your Business Name
-
-BUSINESS_TIMEZONE=Asia/Karachi   # Your Phone Number
-
+┌─────────────────────────────────────────────────────────────────┐
+│                          RECEPTRIX                              │
+│                                                                 │
+│  ┌──────────┐   Webhook    ┌─────────────┐   TwiML   ┌──────┐  │
+│  │  Twilio  │ ──────────► │  main.py    │ ─────────► │      │  │
+│  │    or    │             │  FastAPI    │            │ PSTN │  │
+│  │SignalWire│ ◄────────── │  (port 8000)│ ◄───────── │ Call │  │
+│  └──────────┘   TwiML     └──────┬──────┘            └──────┘  │
+│                                  │                              │
+│  ┌──────────┐   HTTP      ┌──────┴──────┐                       │
+│  │ Browser  │ ──────────► │  Static     │                       │
+│  │Dashboard │             │  Frontend   │                       │
+│  └──────────┘             │ (index.html)│                       │
+│                           └──────┬──────┘                       │
+│                                  │                              │
+│            ┌─────────────────────┼──────────────────┐          │
+│            │                     │                  │          │
+│     ┌──────▼──────┐    ┌─────────▼──────┐  ┌───────▼──────┐   │
+│     │voice_handler│   │receptionist.py │  │   auth.py    │   │
+│     │ (AI conv.)  │   │  (web chat)    │  │  tenant.py   │   │
+│     └──────┬──────┘    └────────────────┘  └───────┬──────┘   │
+│            │                                        │          │
+│     ┌──────▼────────────────────────────────────────▼──────┐   │
+│     │                   database.py                         │   │
+│     │            (Supabase PostgreSQL)                      │   │
+│     └───────────────────────────────────────────────────────┘   │
+│                                                                 │
+│     ┌─────────────────────────────────────────────────────┐    │
+│     │                   AI Providers                       │    │
+│     │   Groq (default) │ OpenAI │ HuggingFace │ Ollama    │    │
+│     └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-   MY_PHONE_NUMBER=+9230952181423. **Install Python dependencies**
+---
 
-### 5. Run the Server
-
-      ```bash
-
-```bash
-
-python main.py   # OpenAI Configuration   pip install -r requirements.txt
+### Voice Call Flow
 
 ```
+Caller dials business number
+         │
+         ▼
+┌─────────────────┐
+│ Twilio/SignalWire│
+│ POST /voice/    │
+│   incoming      │
+└────────┬────────┘
+         │ CallSid, From, To
+         ▼
+┌─────────────────┐
+│   tenant.py     │  resolve_business_from_phone(To)
+│  Phone → Biz   │  Looks up phone_number_mappings table
+└────────┬────────┘
+         │ business_id
+         ▼
+┌─────────────────┐
+│ voice_handler   │  AIVoiceHandler(business_id)
+│ get_greeting()  │  Loads BusinessConfig from Supabase (5-min cache)
+│                 │  get_or_create_caller(From)
+│                 │  Returns greeting text
+└────────┬────────┘
+         │ greeting text
+         ▼
+┌─────────────────┐
+│ twilio_service  │  Wraps text in TwiML
+│     .py or      │  <Say> + <Gather input="speech"
+│signalwire_service│   action="/voice/respond">
+└────────┬────────┘
+         │ TwiML XML → Twilio speaks to caller, listens
 
-   OPENAI_API_KEY=your_openai_api_key   ```
-
-The server will start at `http://localhost:8000`
-
-   
-
-## 🌐 Deployment on Render
-
-   # Server Configuration## Configuration
-
-### 1. Push to GitHub
-
-   SERVER_URL=https://your-ngrok-url.ngrok.io
-
-```bash
-
-git add .   PORT=8000Edit `business_config.json` to customize your business details:
-
-git commit -m "Initial commit"
-
-git push origin main   ```
-
+         │ Caller speaks
+         ▼
+┌─────────────────┐
+│ POST /voice/    │
+│    respond      │  SpeechResult, CallSid, From, To
+└────────┬────────┘
+         │
+         ▼
+┌──────────────────────────────────────────┐
+│ voice_handler.generate_response()        │
+│                                          │
+│ 1. Load conversation state (Supabase)    │
+│ 2. extract_booking_info() via AI (JSON)  │
+│    - name, service, date, time           │
+│    - relative dates → absolute dates     │
+│ 3. Update context fields                 │
+│ 4. Check availability in DB              │
+│ 5. If confirming + all info collected    │
+│    → create_appointment()                │
+│ 6. AI generates spoken reply (≤150 tok)  │
+│ 7. Save conversation state               │
+│ 8. Detect farewell → should_end_call     │
+└────────┬─────────────────────────────────┘
+         │ VoiceResponse(text, should_end_call)
+         ▼
+┌─────────────────┐
+│ voice_service   │  TwiML: <Say> + <Gather> or <Hangup>
+└────────┬────────┘
+         │ TwiML XML
+         ▼
+   Twilio/SignalWire continues call
 ```
 
-```json
+---
 
-### 2. Create Render Service
-
-6. **Configure your business in `business_config.json`:**{
-
-1. Go to [render.com](https://render.com) and sign up/login
-
-2. Click **New +** → **Web Service**   ```json  "business_name": "Your Business Name",
-
-3. Connect your GitHub repository
-
-4. Configure:   {  "working_hours": {
-
-   - **Name**: `receptrix`
-
-   - **Runtime**: Python 3     "business_name": "Your Business Name",    "monday": "9:00 AM - 6:00 PM",
-
-   - **Build Command**: `pip install -r requirements.txt`
-
-   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`     "timezone": "Asia/Karachi",    ...
-
-
-
-### 3. Add Environment Variables     "services": [...],  },
-
-
-
-In Render dashboard, add these environment variables:     "working_hours": {...},  "services": [
-
-
-
-| Key | Value |     "contact_info": {...}    {
-
-|-----|-------|
-
-| `AI_PROVIDER` | `groq` |   }      "name": "Service Name",
-
-| `GROQ_API_KEY` | `your-groq-api-key` |
-
-| `TWILIO_ACCOUNT_SID` | `your-twilio-sid` |   ```      "price": 100,
-
-| `TWILIO_AUTH_TOKEN` | `your-twilio-token` |
-
-| `TWILIO_PHONE_NUMBER` | `+your-twilio-number` |      "duration": 60
-
-| `BUSINESS_NAME` | `Your Business Name` |
-
-| `BUSINESS_TIMEZONE` | `Asia/Karachi` |7. **Run the server:**    }
-
-
-
-### 4. Configure Twilio Webhooks   ```bash  ],
-
-
-
-After deployment, configure your Twilio phone number:   python main.py  "contact_info": {
-
-
-
-1. Go to [Twilio Console](https://console.twilio.com)   ```    "phone": "+1 (555) 123-4567",
-
-2. Navigate to **Phone Numbers** → **Manage** → **Active Numbers**
-
-3. Click on your phone number    "email": "info@business.com",
-
-4. Under **Voice Configuration**:
-
-   - **A Call Comes In**: Webhook8. **Access the dashboard:**    "address": "123 Main St, City, State"
-
-   - **URL**: `https://your-app.onrender.com/voice/incoming`
-
-   - **HTTP Method**: POST   Open `http://localhost:8000` in your browser  }
-
-
-
-## 📡 API Endpoints}
-
-
-
-### Voice Endpoints (Twilio Webhooks)## 📱 Twilio Setup```
-
-
-
-| Endpoint | Method | Description |
-
-|----------|--------|-------------|
-
-| `/voice/incoming` | POST | Handles incoming calls from Twilio |### Getting a Phone Number## Running the Application
-
-| `/voice/process` | POST | Processes speech input and generates AI response |
-
-| `/voice/transcribe` | POST | Handles speech transcription |
-
-
-
-### Dashboard Endpoints1. Create a [Twilio account](https://www.twilio.com/try-twilio)1. **Start the FastAPI server**
-
-
-
-| Endpoint | Method | Description |2. Get a phone number with **Voice** capabilities   ```bash
-
-|----------|--------|-------------|
-
-| `/` | GET | Dashboard web interface |3. For Pakistan, you may need to use a US/UK number and forward calls   python main.py
-
-| `/stats` | GET | Get dashboard statistics |
-
-| `/config` | GET | Get business configuration |   ```
-
-| `/appointments` | GET | List all appointments |
-
-| `/appointments` | POST | Create new appointment |### Configuring Webhooks   
-
-| `/calls` | GET | Get call logs |
-
-| `/available-slots` | GET | Get available time slots |   Or using uvicorn directly:
-
-
-
-### Chat Endpoints1. Go to [Twilio Console](https://console.twilio.com) → Phone Numbers → Manage → Active Numbers   ```bash
-
-
-
-| Endpoint | Method | Description |2. Click on your phone number   uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-|----------|--------|-------------|
-
-| `/chat` | POST | Send message to AI receptionist |3. Under **Voice & Fax**, configure:   ```
-
-| `/book` | POST | Book an appointment |
-
-| `/bookings` | GET | Get all bookings |
-
-
-
-## ⚙️ Configuration   | Setting | Value |2. **Open your browser**
-
-
-
-### Business Configuration (`business_config.json`)   |---------|-------|   Navigate to: `http://localhost:8000`
-
-
-
-```json   | A CALL COMES IN | Webhook: `https://your-domain.com/voice/incoming` |
-
-{
-
-  "business_name": "Your Business",   | HTTP Method | POST |The chat interface should load automatically.
-
-  "business_hours": {
-
-    "monday": {"open": "09:00", "close": "18:00"},   | STATUS CALLBACK URL | `https://your-domain.com/voice/status` |
-
-    "tuesday": {"open": "09:00", "close": "18:00"}
-
-  },## API Endpoints
-
-  "services": [
-
-    {"name": "Consultation", "duration": 30, "price": 1000},### Using ngrok for Development
-
-    {"name": "Follow-up", "duration": 15, "price": 500}
-
-  ],- `GET /` - Serves the frontend HTML
-
-  "timezone": "Asia/Karachi",
-
-  "currency": "PKR",```bash- `POST /chat` - Send a chat message and get AI response
-
-  "phone_number": "+923095218142"
-
-}# Install ngrok- `GET /services` - Get list of available services
+### Web Chat Flow
 
 ```
+Browser sends message
+         │
+         ▼
+┌─────────────────┐
+│  POST /chat     │
+│ (optional       │
+│ X-Business-Id)  │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────────────┐
+│ ReceptionistAI.detect_intent()          │
+│                                         │
+│  Keyword matching →                     │
+│  greeting / service_inquiry /           │
+│  pricing_inquiry / working_hours /      │
+│  booking_request / contact_info /       │
+│  fallback                               │
+└────────┬────────────────────────────────┘
+         │ intent
+         ▼
+┌─────────────────────────────────────────┐
+│ generate_response()                     │
+│                                         │
+│  Rule-based: services, pricing,         │
+│              hours, contact info        │
+│  Groq AI:    greeting, booking,         │
+│              fallback                   │
+└────────┬────────────────────────────────┘
+         │ ChatResponse(message, intent)
+         ▼
+      Browser
+```
+
+---
+
+### Multi-Tenant Auth Flow
+
+```
+Client                              Server
+  │                                    │
+  │  POST /auth/signup                 │
+  │ ──────────────────────────────────►│
+  │                                    │  Supabase Auth.sign_up()
+  │                                    │  Trigger auto-creates profiles row
+  │  { user_id, access_token }         │
+  │ ◄──────────────────────────────────│
+  │                                    │
+  │  POST /auth/business               │
+  │  Authorization: Bearer <jwt>       │
+  │ ──────────────────────────────────►│
+  │                                    │  Creates businesses row
+  │                                    │  Creates business_memberships (owner)
+  │  { business_id, ... }              │
+  │ ◄──────────────────────────────────│
+  │                                    │
+  │  GET /business/settings            │
+  │  Authorization: Bearer <jwt>       │
+  │  X-Business-Id: <uuid>             │
+  │ ──────────────────────────────────►│
+  │                                    │  require_business_access():
+  │                                    │  1. Validate JWT via Supabase
+  │                                    │  2. Check business_memberships
+  │  { settings }                      │
+  │ ◄──────────────────────────────────│
+```
+
+---
+
+### Database Schema
+
+```
+┌──────────────┐        ┌──────────────────────┐
+│   profiles   │        │      businesses      │
+│──────────────│        │──────────────────────│
+│ id (UUID)    │        │ id (UUID)            │
+│ email        │        │ name                 │
+│ full_name    │        │ phone / email        │
+└──────┬───────┘        │ address              │
+       │                │ timezone             │
+       │                │ greeting_message     │
+       │                │ working_hours (JSONB)│
+       │                └──────────┬───────────┘
+       │                           │
+       │   ┌───────────────────────┤
+       │   │  business_memberships │
+       │   │───────────────────────│
+       └───┤ user_id (FK profiles) │
+           │ business_id (FK biz)  │
+           │ role                  │
+           │ (owner/admin/staff)   │
+           └───────────────────────┘
+
+┌───────────────────────────┐    ┌──────────────────────┐
+│   phone_number_mappings   │    │       services       │
+│───────────────────────────│    │──────────────────────│
+│ phone_number              │    │ id (UUID)            │
+│ business_id (FK)          │    │ business_id (FK)     │
+│ is_active                 │    │ name / price         │
+└───────────────────────────┘    │ duration (minutes)   │
+                                 │ description          │
+                                 │ is_active            │
+                                 └──────────────────────┘
+
+┌────────────────────┐    ┌───────────────────────────┐
+│      callers       │    │         call_logs         │
+│────────────────────│    │───────────────────────────│
+│ id                 │    │ id                        │
+│ business_id (FK)   │    │ business_id (FK)          │
+│ phone_number       │    │ call_sid                  │
+│ name / email       │    │ caller_id (FK)            │
+│ notes              │    │ caller_phone              │
+│ total_calls        │    │ call_status               │
+│ total_appointments │    │ started_at / ended_at     │
+└─────────┬──────────┘    │ duration_seconds          │
+          │               │ transcript / summary      │
+          │               │ appointment_created       │
+          │               │ appointment_id            │
+          │               └───────────────────────────┘
+          │
+          ▼
+┌─────────────────────────┐    ┌────────────────────────────┐
+│      appointments       │    │    conversation_states     │
+│─────────────────────────│    │────────────────────────────│
+│ id                      │    │ call_sid (PK)              │
+│ business_id (FK)        │    │ caller_phone               │
+│ caller_id (FK callers)  │    │ state                      │
+│ caller_name             │    │ caller_name                │
+│ caller_phone            │    │ requested_service          │
+│ service_name            │    │ requested_date             │
+│ appointment_date        │    │ requested_time             │
+│ appointment_time        │    │ messages (JSONB)           │
+│ duration_minutes        │    │ extracted_info (JSONB)     │
+│ status                  │    │ created_at / updated_at    │
+│ notes / reminder_sent   │    └────────────────────────────┘
+│ created_at              │
+└─────────────────────────┘
+```
 
-# Download from https://ngrok.com/download- `POST /book` - Create a new booking
+---
 
-### AI Providers
+## Module Reference
 
-- `GET /bookings` - Get all bookings (admin/demo)
+### [main.py](main.py)
+FastAPI application entry point. Registers all routes, CORS middleware, and rate limiting. Serves the static frontend directly.
 
-| Provider | Free Tier | Model |
+**Route groups:**
+- Auth endpoints (`/auth/*`)
+- Business settings CRUD (`/business/*`) — JWT-protected, admin for writes
+- Voice webhooks (`/voice/*`) — no auth, called by Twilio/SignalWire
+- Chat, appointments, call logs, stats
+- Health check with Supabase + AI + voice provider verification
 
-|----------|-----------|-------|# Start ngrok tunnel- `GET /config` - Get business configuration
+**Rate limits:** 10/min on signup, 20/min on signin, 60/min on chat.
 
-| **Groq** | ✅ Yes | Llama 3 70B |
+---
 
-| OpenAI | ❌ Paid | GPT-4 |ngrok http 8000
+### [voice_handler.py](voice_handler.py)
+Core AI conversation engine for phone calls.
 
-| HuggingFace | ✅ Limited | Various |
+**`AIProvider` (abstract base class)**  
+Implemented by `GroqProvider`, `HuggingFaceProvider`, `OllamaProvider`, `OpenAIProvider`. Selected at startup via `AI_PROVIDER` env var.
 
-| Ollama | ✅ Local | Various |## Project Structure
+**`AIVoiceHandler`**  
+One instance per business (cached in `_handlers` dict to avoid cross-tenant config leaks).
 
+| Method | Purpose |
+|---|---|
+| `get_greeting()` | First message for a new call. Personalizes for returning callers. |
+| `generate_response()` | Main conversation loop: loads state → extracts booking info → checks availability → optionally creates appointment → generates spoken reply. |
+| `extract_booking_info()` | Calls AI with a structured extraction prompt to parse name/service/date/time from free speech. Returns JSON. Converts relative dates to absolute. |
+| `_should_finalize_booking()` | Returns true when name + service + date + time are all known and caller confirms. |
+| `_attempt_booking()` | Validates service, checks slot availability, creates appointment row. |
+| `_should_end_call()` | Detects farewell phrases in both caller input and AI response. |
 
+---
 
-## 🔧 Development# Copy the HTTPS URL (e.g., https://abc123.ngrok.io)
+### [twilio_service.py](twilio_service.py) / [signalwire_service.py](signalwire_service.py)
+Voice provider adapters. Both produce TwiML XML. SignalWire reuses Twilio's TwiML library — no SignalWire SDK required.
 
+Selected by `VOICE_PROVIDER` env var (`twilio` or `signalwire`).
 
+Key methods: `handle_incoming_call()`, `handle_speech_input()`, `handle_no_input()`, `handle_call_status()`.
 
-### Running Locally with ngrok# Update your .env file with this URL```
+---
 
+### [receptionist.py](receptionist.py)
+Web chat handler. Uses keyword-based intent detection followed by rule-based or Groq AI responses.
 
+**Intent types:** `greeting`, `service_inquiry`, `pricing_inquiry`, `working_hours`, `booking_request`, `contact_info`, `fallback`
 
-For local development with Twilio:# Update Twilio webhook URLsReceptrix/
+Rule-based responses for services/pricing/hours/contact (fast, deterministic). Groq AI for greeting/booking/fallback.
 
+---
 
+### [database.py](database.py)
+All Supabase PostgreSQL operations. No ORM — direct `supabase-py` queries.
 
-```bash```├── main.py                 # FastAPI application
+Every function accepts an optional `business_id` parameter. When provided, queries are scoped to that tenant. When `None`, backward-compatible single-tenant behavior applies.
 
-# Terminal 1: Start the server
+**Operation groups:** callers, call logs, appointments, bookings (legacy), conversation states.
 
-python main.py├── models.py               # Pydantic data models
+---
 
+### [auth.py](auth.py)
+Authentication and authorization FastAPI dependencies.
 
+| Dependency | Requirement |
+|---|---|
+| `require_auth` | Valid Supabase JWT in `Authorization: Bearer` header |
+| `require_business_access` | Auth + membership in the business from `X-Business-Id` header |
+| `require_business_admin` | Auth + `owner` or `admin` role in that business |
 
-# Terminal 2: Start ngrok tunnel## 🏗️ Project Structure├── config.py               # Configuration loader
+Also contains `sign_up()`, `sign_in()`, `create_business_for_user()`, `add_business_member()`.
 
-ngrok http 8000
+---
 
-```├── database.py             # SQLite database operations
+### [tenant.py](tenant.py)
+Business config resolution and caching.
 
+- `resolve_business_from_phone(to_number)` — maps provider phone number → `business_id` via `phone_number_mappings` table. Used by voice webhooks.
+- `get_business_config(business_id)` — loads `BusinessConfig` from Supabase with 5-minute in-process TTL cache.
+- `invalidate_config_cache(business_id)` — called after any settings/service update so voice and chat picks up changes immediately.
 
+Falls back to static `business_config.json` via `config.py` when `business_id` is `None`.
 
-Use the ngrok URL for Twilio webhooks during development.```├── receptionist.py         # AI receptionist logic
+---
 
+### [supabase_client.py](supabase_client.py)
+Singleton Supabase service-role client. Created once on first call to `get_supabase()`. Requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
 
+---
 
-### Database SchemaReceptrix/├── business_config.json    # Business configuration
+### [config.py](config.py)
+Loads `business_config.json` from disk. Cached singleton via `get_config()`. Used as fallback in single-tenant mode and by the legacy `/book` endpoint.
 
+---
 
+### [logging_config.py](logging_config.py)
+Structured logging setup. All modules use `get_logger(__name__)`.
 
-The application uses SQLite with the following tables:├── main.py              # FastAPI application & endpoints├── requirements.txt        # Python dependencies
+| Env var | Default | Options |
+|---|---|---|
+| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `LOG_FORMAT` | `text` | `text`, `json` (structured for production) |
 
+---
 
+### [models.py](models.py)
+Pydantic v2 models: `BusinessConfig`, `WorkingHours`, `Service`, `ContactInfo`, `Caller`, `CallLog`, `Appointment`, `AppointmentCreate`, `ConversationState`, `VoiceResponse`, `ChatRequest`, `ChatResponse`, `Booking`.
 
-- **callers** - Stores caller information (phone, name, preferences)├── models.py            # Data models (Pydantic)├── index.html             # Frontend HTML
+---
 
-- **appointments** - Stores all appointments with status tracking
+### Frontend: [index.html](index.html) / [style.css](style.css) / [script.js](script.js)
+Single-page dashboard served as static files by FastAPI. No build step required.
 
-- **call_logs** - Logs all incoming calls with transcripts├── database.py          # SQLite database operations├── style.css              # Frontend styles
+Features: appointment list, call logs, live chat interface, business settings panel. Sends `X-Business-Id` header on all API calls after login.
 
-- **bookings** - Legacy booking system for web interface
+---
 
-├── config.py            # Configuration loader├── script.js              # Frontend JavaScript
+## Data Model
 
-## 🤝 Contributing
+### Appointment Status
+`scheduled` → `confirmed` → `completed` | `cancelled` | `no_show`
 
-├── receptionist.py      # Chat-based AI logic├── receptionist.db        # SQLite database (created automatically)
+### Call Status
+`incoming` → `in_progress` → `completed` | `failed` | `no_answer`
 
-1. Fork the repository
+### Business Member Roles
+- `owner` — full access, can manage members
+- `admin` — can edit settings and services
+- `staff` — read-only access
 
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)├── voice_handler.py     # AI voice conversation handler└── README.md              # This file
+---
 
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
+## Authentication & Multi-Tenancy
 
-4. Push to the branch (`git push origin feature/amazing-feature`)├── twilio_service.py    # Twilio integration```
+Each business is isolated by `business_id` (UUID). All tenant-scoped DB functions filter by this field.
 
-5. Open a Pull Request
+**User onboarding:**
+1. `POST /auth/signup` → Supabase creates auth user + profile row
+2. `POST /auth/business` → Creates business, assigns caller as `owner`
+3. All requests: `Authorization: Bearer <access_token>` + `X-Business-Id: <uuid>`
 
-├── business_config.json # Business settings
+**Voice webhook tenant resolution:**  
+Voice webhooks carry no JWT. The business is resolved from the `To` phone number via the `phone_number_mappings` table. Add a row there mapping each provider phone number to its `business_id`.
 
-## 📄 License
+**Adding team members:**  
+`POST /auth/business/members` with `{ email, role }` — user must already have a Receptrix account.
 
-├── .env                 # Environment variables (create this)## How It Works
+---
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## AI Provider System
 
-├── .env.example         # Example environment file
+Selected by the `AI_PROVIDER` environment variable:
 
-## 🙏 Acknowledgments
+| Provider | Env var | Default model | Notes |
+|---|---|---|---|
+| `groq` (default) | `GROQ_API_KEY` | `llama-3.1-8b-instant` | Fast, free tier available |
+| `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` | Paid |
+| `huggingface` | `HUGGINGFACE_API_KEY` | `mistralai/Mistral-7B-Instruct-v0.2` | Free tier |
+| `ollama` | none | `llama3` | Local, requires Ollama running |
 
-├── requirements.txt     # Python dependencies1. **Intent Detection**: The system uses keyword-based intent detection to categorize user messages (greeting, service inquiry, pricing, hours, booking, etc.)
+Model can be overridden per-provider: `GROQ_MODEL`, `OPENAI_MODEL`, `HUGGINGFACE_MODEL`, `OLLAMA_MODEL`.
 
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
+All providers implement the `AIProvider` abstract base class with a single `chat(messages, temperature, max_tokens)` method.
 
-- [Twilio](https://www.twilio.com/) - Voice and messaging APIs├── index.html           # Dashboard frontend
+Voice responses are capped at 150 tokens (concise for phone speech). Chat responses allow up to 300 tokens.
 
-- [Groq](https://groq.com/) - Fast AI inference
+---
 
-- [Render](https://render.com/) - Cloud hosting platform├── style.css            # Dashboard styles2. **Response Generation**: 
+## Voice Call Flow
 
+Detailed lifecycle:
 
+1. **Incoming**: Twilio/SignalWire POSTs to `/voice/incoming` with `CallSid`, `From` (caller), `To` (your number).
+2. **Tenant resolution**: `To` is looked up in `phone_number_mappings` to get `business_id`.
+3. **Caller lookup**: `get_or_create_caller()` finds or creates the caller, increments `total_calls`.
+4. **Greeting**: Personalized for returning callers with a known name; generic for new callers.
+5. **TwiML response**: `<Say>` greeting + `<Gather input="speech" action="/voice/respond">`.
+6. **Speech input**: Twilio/SignalWire POSTs to `/voice/respond` with `SpeechResult`.
+7. **Extraction**: AI parses name, service, date, time from free speech. Relative dates ("tomorrow") converted to absolute.
+8. **Availability**: If a date is known, available slots are fetched and injected into AI context.
+9. **Booking**: When all four fields collected and caller confirms → `create_appointment()`.
+10. **State persistence**: Full message history saved to `conversation_states` between webhook calls.
+11. **Call end**: Farewell phrases in caller speech + AI reply → `<Hangup>`.
 
-## 📞 Support├── script.js            # Dashboard JavaScript   - For structured queries (services, pricing, hours), rule-based responses are used for consistency
+**No-input**: `/voice/no-input` prompts the caller to speak again.
 
+---
 
+## Web Chat Flow
 
-For support, please open an issue on GitHub or contact the maintainers.└── receptionist.db      # SQLite database (auto-created)   - For conversational queries (greetings, bookings, general questions), the Ollama LLM generates responses
+1. Browser sends `POST /chat` with `{ message, conversation_history }` and optional `X-Business-Id` header.
+2. `ReceptionistAI.detect_intent()` classifies the message by keyword matching.
+3. Rule-based responses for services, pricing, hours, contact info (fast and consistent).
+4. Groq AI for greeting, booking requests, and fallback (last 5 messages as context).
+5. Returns `{ message, intent }`.
 
+---
 
+## API Reference
 
----```
+### Auth
 
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/auth/signup` | none | Register new user |
+| POST | `/auth/signin` | none | Sign in, returns tokens + businesses |
+| GET | `/auth/me` | JWT | Current user profile + memberships |
+| POST | `/auth/business` | JWT | Create a new business |
+| POST | `/auth/business/members` | JWT + admin | Add team member by email |
 
+### Business Settings
 
-**Made with ❤️ by Shahmir**3. **Booking Flow**: When a user expresses interest in booking, the AI guides them through providing necessary information (name, service, date, time), which is then stored in SQLite
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/business/settings` | JWT + member | Get business settings |
+| PATCH | `/business/settings` | JWT + admin | Update business settings |
+| GET | `/business/services` | JWT + member | List all services |
+| POST | `/business/services` | JWT + admin | Create service |
+| PATCH | `/business/services/{id}` | JWT + admin | Update service |
+| DELETE | `/business/services/{id}` | JWT + admin | Soft-delete service |
 
+### Voice Webhooks (no auth — Twilio/SignalWire only)
 
-## 📡 API Endpoints
+| Method | Path | Description |
+|---|---|---|
+| POST | `/voice/incoming` | Handle new inbound call |
+| POST | `/voice/respond` | Handle caller speech input |
+| POST | `/voice/no-input` | Handle silence / no input |
+| POST | `/voice/status` | Call status updates |
 
-4. **Configuration-Driven**: All business details come from `business_config.json`, making it easy to customize without code changes
+### Chat & Data
 
-### Voice Endpoints (Twilio)
-
-| Method | Endpoint | Description |## Customization
-
-|--------|----------|-------------|
-
-| POST | `/voice/incoming` | Handle incoming calls |### Changing the AI Model
-
-| POST | `/voice/respond` | Process speech input |
-
-| POST | `/voice/status` | Call status updates |Edit `receptionist.py`, line 26:
-
-```python
-
-### Chat Endpointsdef __init__(self, model_name: str = "llama3"):
-
-| Method | Endpoint | Description |    # Change "llama3" to any Ollama model you have installed
-
-|--------|----------|-------------|```
-
-| POST | `/chat` | Send chat message |
-
-### Adding New Intents
-
-### Appointment Endpoints
-
-| Method | Endpoint | Description |1. Add a new constant to `IntentType` class in `receptionist.py`
-
-|--------|----------|-------------|2. Add detection logic in `detect_intent()` method
-
-| GET | `/appointments` | List appointments |3. Add handling logic in `generate_response()` method
-
+| Method | Path | Description |
+|---|---|---|
+| POST | `/chat` | Web chat message |
+| GET | `/services` | List services (tenant-aware via `X-Business-Id`) |
 | POST | `/appointments` | Create appointment |
-
-| GET | `/appointments/availability` | Check time slots |### Database Schema
-
-| PATCH | `/appointments/{id}/status` | Update status |
-
-The bookings table structure:
-
-### Other Endpoints- `id` (INTEGER, PRIMARY KEY)
-
-| Method | Endpoint | Description |- `name` (TEXT)
-
-|--------|----------|-------------|- `service` (TEXT)
-
-| GET | `/services` | List services |- `date` (TEXT, YYYY-MM-DD)
-
-| GET | `/calls` | Get call logs |- `time` (TEXT, HH:MM)
-
-| GET | `/config` | Get business config |- `timestamp` (TEXT, ISO format)
-
+| GET | `/appointments` | List appointments (optional `?date=`) |
+| GET | `/appointments/availability` | Check available slots |
+| PATCH | `/appointments/{id}/status` | Update appointment status |
+| GET | `/calls` | Get call logs |
+| GET | `/config` | Get business config |
 | GET | `/stats` | Dashboard statistics |
 
-| GET | `/health` | Health check |## Troubleshooting
+### Health & Debug
 
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health` | Health check — Supabase + AI + voice provider |
+| GET | `/debug/ai` | Test AI provider connectivity |
+| GET | `/debug/voice` | Test full voice handler response |
 
+> Tenant-aware endpoints read the `X-Business-Id` header to scope data. Without it they fall back to single-tenant mode using `business_config.json`.
 
-## 🎯 How It Works**Ollama connection errors:**
+---
 
-- Ensure Ollama is running: `ollama list`
+## Configuration
 
-### Call Flow- Verify the model is installed: `ollama pull llama3`
+### Environment Variables
 
+Copy `.env.example` to `.env` and fill in your values:
 
+```bash
+# Supabase
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-1. **Incoming Call** → Twilio forwards to `/voice/incoming`**Port already in use:**
+# AI Provider
+AI_PROVIDER=groq                         # groq | openai | huggingface | ollama
+GROQ_API_KEY=your-groq-key
+GROQ_MODEL=llama-3.1-8b-instant         # optional override
+# OPENAI_API_KEY=...
+# OPENAI_MODEL=gpt-4o-mini
+# HUGGINGFACE_API_KEY=...
+# OLLAMA_URL=http://localhost:11434
 
-2. **AI Greeting** → Personalized greeting (recognizes returning callers)- Change the port in `main.py` or use: `uvicorn main:app --port 8001`
+# Voice Provider
+VOICE_PROVIDER=twilio                    # twilio | signalwire
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=+1...
+# SIGNALWIRE_PROJECT_ID=...
+# SIGNALWIRE_API_TOKEN=...
+# SIGNALWIRE_SPACE_URL=...
+# SIGNALWIRE_PHONE_NUMBER=+1...
 
-3. **Speech Recognition** → Twilio transcribes caller's speech
+# Server
+SERVER_URL=https://your-app.onrender.com
+PORT=8000
 
-4. **AI Processing** → OpenAI generates natural response**CORS errors:**
+# CORS (comma-separated origins; omit for wildcard *)
+ALLOWED_ORIGINS=https://your-frontend.com
 
-5. **Information Extraction** → AI extracts booking details- The current setup allows all origins. In production, update `allow_origins` in `main.py`
-
-6. **Availability Check** → System checks for conflicts
-
-7. **Booking Confirmation** → Appointment created in database## Future Enhancements
-
-8. **Call End** → Transcript saved to call logs
-
-This MVP is designed to be extended for salon-specific features:
-
-### Conversation Example- Multiple business locations
-
-- Service categories and sub-services
-
-```- Booking conflict detection
-
-AI: "Thank you for calling Your Business. My name is Sarah, how may I assist you today?"- Email/SMS notifications
-
-- Customer authentication
-
-Caller: "Hi, I'd like to book an appointment"- Appointment management dashboard
-
-- Payment integration
-
-AI: "I'd be happy to help you book an appointment! What service are you interested in?"
-
-## License
-
-Caller: "I need a consultation"
-
-This is a free, open-source MVP. Customize as needed for your use case.
-
-AI: "Great choice! A consultation is Rs.2000 for 30 minutes. What date works for you?"
-
-## Support
-
-Caller: "Tomorrow at 3pm"
-
-For issues or questions, check that:
-
-AI: "Let me check... Yes, 3 PM tomorrow is available. May I have your name please?"1. Python 3.8+ is installed
-
-2. All dependencies are installed (`pip install -r requirements.txt`)
-
-Caller: "It's Ahmad Khan"3. Ollama is running and llama3 model is pulled
-
-4. The configuration file is valid JSON
-
-AI: "Perfect, Ahmad! I have you down for a Consultation tomorrow at 3 PM. Can you confirm this is correct?"5. Port 8000 is available
-
-
-
-Caller: "Yes, that's right"
-
-
-AI: "Wonderful! Your appointment is confirmed. We'll see you tomorrow at 3 PM. Is there anything else I can help you with?"
+# Logging
+LOG_LEVEL=INFO                           # DEBUG | INFO | WARNING | ERROR
+LOG_FORMAT=text                          # text | json
 ```
 
-## ⚙️ Configuration
+### Business Config (single-tenant fallback)
 
-### Business Config (`business_config.json`)
+`business_config.json` is used when no `business_id` is provided via header:
 
 ```json
 {
-  "business_name": "Your Business Name",
+  "business_name": "My Business",
   "timezone": "Asia/Karachi",
   "working_hours": {
     "monday": "9:00 AM - 6:00 PM",
@@ -723,67 +609,85 @@ AI: "Wonderful! Your appointment is confirmed. We'll see you tomorrow at 3 PM. I
     "sunday": "Closed"
   },
   "services": [
-    {
-      "name": "Consultation",
-      "price": 2000,
-      "duration": 30,
-      "description": "Initial consultation"
-    }
+    { "name": "Consultation", "price": 500, "duration": 30 }
   ],
   "contact_info": {
-    "phone": "+92 3095218142",
-    "email": "info@business.pk",
-    "address": "Your Address, City, Pakistan"
+    "phone": "+92-XXX-XXXXXXX",
+    "email": "info@yourbusiness.com",
+    "address": "123 Main St"
   }
 }
 ```
 
-## 🔐 Security Notes
+---
 
-- Never commit `.env` file to version control
-- Use HTTPS in production (required for Twilio)
-- Implement rate limiting for production
-- Add authentication for dashboard in production
+## Setup & Running
 
-## 🐛 Troubleshooting
+```bash
+# 1. Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
 
-### Common Issues
+# 2. Install dependencies
+pip install -r requirements.txt
 
-1. **"Twilio credentials not configured"**
-   - Check your `.env` file has correct Twilio credentials
-   - Restart the server after updating `.env`
+# 3. Configure environment
+cp .env.example .env
+# Edit .env with your credentials
 
-2. **"OpenAI API error"**
-   - Verify your OpenAI API key is valid
-   - Check you have credits in your OpenAI account
+# 4. Run
+python main.py
+# or with hot-reload for development:
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-3. **Calls not connecting**
-   - Ensure your ngrok tunnel is running
-   - Verify webhook URLs in Twilio console match your server URL
-   - Check server logs for errors
+Open `http://localhost:8000` for the dashboard.
 
-4. **Speech not recognized**
-   - Speak clearly and at normal pace
-   - Ensure good phone connection quality
+### Voice Webhook Setup
 
-## 📈 Future Improvements
+For local development, expose your server with [ngrok](https://ngrok.com):
 
-- [ ] SMS appointment reminders
-- [ ] Multi-language support (Urdu)
-- [ ] Calendar integration (Google/Outlook)
-- [ ] Multiple staff/resource scheduling
-- [ ] WhatsApp integration
-- [ ] Analytics dashboard
-- [ ] Voice customization
+```bash
+ngrok http 8000
+```
 
-## 📄 License
+Configure your Twilio or SignalWire phone number:
+- **Incoming call webhook**: `https://your-ngrok-url.ngrok.io/voice/incoming`
+- **Status callback**: `https://your-ngrok-url.ngrok.io/voice/status`
+- **Method**: POST
 
-MIT License - Feel free to use and modify for your business!
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+For multi-tenant routing, add a row to the `phone_number_mappings` table mapping each provider phone number to the correct `business_id`.
 
 ---
 
-Made with ❤️ for businesses in Pakistan
+## Deployment
+
+### Render
+
+A `render.yaml` is included. Start command:
+
+```
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+Set all environment variables in the Render dashboard under **Environment**.
+
+### Heroku
+
+A `Procfile` is included:
+
+```
+web: uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+### Database Migrations
+
+Schema is managed via Supabase migrations in `supabase/migrations/`. Apply with:
+
+```bash
+supabase db push
+```
+
+or run the SQL files manually in the Supabase SQL editor.
+
+**Python 3.11+ required.**
