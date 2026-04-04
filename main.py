@@ -559,7 +559,7 @@ async def debug_voice():
 
 @app.post("/chat", response_model=ChatResponse)
 @limiter.limit("60/minute")
-async def chat(http_request: Request, request: ChatRequest):
+async def chat(request: Request, chat_request: ChatRequest):
     """
     Handle chat messages from users (web interface).
     If authenticated with X-Business-Id, uses tenant-scoped config.
@@ -567,12 +567,12 @@ async def chat(http_request: Request, request: ChatRequest):
     """
     try:
         # Try to extract business context (optional for chat)
-        business_id = http_request.headers.get("x-business-id")
+        business_id = request.headers.get("x-business-id")
         receptionist = ReceptionistAI(business_id=business_id)
 
         result = receptionist.handle_message(
-            message=request.message,
-            conversation_history=request.conversation_history
+            message=chat_request.message,
+            conversation_history=chat_request.conversation_history
         )
 
         return ChatResponse(
