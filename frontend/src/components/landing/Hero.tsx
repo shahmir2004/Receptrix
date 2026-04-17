@@ -33,7 +33,7 @@ export default function Hero() {
       </div>
 
       {/* ── Hero content ─────────────────────────────────────────────────── */}
-      <div className="relative z-10 flex flex-col items-center text-center max-w-4xl mx-auto px-6 pt-32 pb-24">
+      <div className="relative z-10 flex flex-col items-center text-center w-full max-w-4xl mx-auto px-4 sm:px-6 pt-28 sm:pt-32 pb-20 sm:pb-24">
         {/* Badge */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -55,7 +55,7 @@ export default function Hero() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.1, ease }}
-          className="font-display text-[clamp(2.8rem,8vw,6rem)] font-extrabold leading-[1.02] tracking-[-0.03em]"
+          className="font-display text-[clamp(2rem,8vw,6rem)] font-extrabold leading-[1.02] tracking-[-0.03em] w-full break-words"
         >
           <span className="text-white drop-shadow-[0_2px_24px_rgba(0,0,0,0.8)]">
             Your AI Receptionist
