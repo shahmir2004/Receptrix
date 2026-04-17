@@ -31,5 +31,9 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+.CLAUDE.md
 
+# Frontend dependencies
+frontend/node_modules/
+node_modules/
 

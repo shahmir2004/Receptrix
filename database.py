@@ -398,13 +398,23 @@ def get_all_appointments(
     return appointments
 
 
-def update_appointment_status(appointment_id: int, status: AppointmentStatus) -> None:
+def update_appointment_status(
+    appointment_id: int,
+    status: AppointmentStatus,
+    business_id: Optional[str] = None,
+) -> None:
     """Update appointment status."""
     sb = get_supabase()
 
-    sb.table("appointments").update({
+    query = sb.table("appointments").update({
         "status": status.value
-    }).eq("id", appointment_id).execute()
+    }).eq("id", appointment_id)
+    if business_id:
+        query = query.eq("business_id", business_id)
+
+    result = query.execute()
+    if not result.data:
+        raise ValueError("Appointment not found")
 
 
 def get_caller_appointments(

@@ -430,9 +430,11 @@ Features: appointment list, call logs, live chat interface, business settings pa
 Each business is isolated by `business_id` (UUID). All tenant-scoped DB functions filter by this field.
 
 **User onboarding:**
-1. `POST /auth/signup` → Supabase creates auth user + profile row
-2. `POST /auth/business` → Creates business, assigns caller as `owner`
-3. All requests: `Authorization: Bearer <access_token>` + `X-Business-Id: <uuid>`
+1. `POST /auth/signup` with `{ email, password, full_name, business_name }`
+2. Supabase creates auth user + profile row, backend auto-creates business and owner membership
+3. `POST /auth/signin` issues secure HttpOnly session cookies
+4. Dashboard/API requests use cookie session + `X-Business-Id: <uuid>`
+5. Cookie-authenticated `POST/PATCH/DELETE` requests must include `X-CSRF-Token`
 
 **Voice webhook tenant resolution:**  
 Voice webhooks carry no JWT. The business is resolved from the `To` phone number via the `phone_number_mappings` table. Add a row there mapping each provider phone number to its `business_id`.
@@ -483,7 +485,7 @@ Detailed lifecycle:
 
 ## Web Chat Flow
 
-1. Browser sends `POST /chat` with `{ message, conversation_history }` and optional `X-Business-Id` header.
+1. Browser sends authenticated `POST /chat` with `{ message, conversation_history }` and `X-Business-Id`.
 2. `ReceptionistAI.detect_intent()` classifies the message by keyword matching.
 3. Rule-based responses for services, pricing, hours, contact info (fast and consistent).
 4. Groq AI for greeting, booking requests, and fallback (last 5 messages as context).
@@ -497,22 +499,26 @@ Detailed lifecycle:
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/auth/signup` | none | Register new user |
-| POST | `/auth/signin` | none | Sign in, returns tokens + businesses |
-| GET | `/auth/me` | JWT | Current user profile + memberships |
-| POST | `/auth/business` | JWT | Create a new business |
-| POST | `/auth/business/members` | JWT + admin | Add team member by email |
+| POST | `/auth/signup` | none | Register new user, auto-create owner business |
+| POST | `/auth/signin` | none | Sign in and set secure cookies |
+| POST | `/auth/refresh` | session + CSRF | Refresh session cookies |
+| POST | `/auth/logout` | session + CSRF | Clear session cookies |
+| GET | `/auth/me` | session | Current user profile + memberships |
+| PATCH | `/auth/profile` | session + CSRF | Update name/email |
+| PATCH | `/auth/password` | session + CSRF | Change password |
+| POST | `/auth/business` | session + CSRF | Create a new business |
+| POST | `/auth/business/members` | session + admin + CSRF | Add team member by email |
 
 ### Business Settings
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/business/settings` | JWT + member | Get business settings |
-| PATCH | `/business/settings` | JWT + admin | Update business settings |
-| GET | `/business/services` | JWT + member | List all services |
-| POST | `/business/services` | JWT + admin | Create service |
-| PATCH | `/business/services/{id}` | JWT + admin | Update service |
-| DELETE | `/business/services/{id}` | JWT + admin | Soft-delete service |
+| GET | `/business/settings` | session + member | Get business settings |
+| PATCH | `/business/settings` | session + admin + CSRF | Update business settings |
+| GET | `/business/services` | session + member | List all services |
+| POST | `/business/services` | session + admin + CSRF | Create service |
+| PATCH | `/business/services/{id}` | session + admin + CSRF | Update service |
+| DELETE | `/business/services/{id}` | session + admin + CSRF | Soft-delete service |
 
 ### Voice Webhooks (no auth — Twilio/SignalWire only)
 
@@ -527,15 +533,15 @@ Detailed lifecycle:
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/chat` | Web chat message |
-| GET | `/services` | List services (tenant-aware via `X-Business-Id`) |
-| POST | `/appointments` | Create appointment |
-| GET | `/appointments` | List appointments (optional `?date=`) |
-| GET | `/appointments/availability` | Check available slots |
-| PATCH | `/appointments/{id}/status` | Update appointment status |
-| GET | `/calls` | Get call logs |
-| GET | `/config` | Get business config |
-| GET | `/stats` | Dashboard statistics |
+| POST | `/chat` | Web chat message (session + member) |
+| GET | `/services` | List services (session + member) |
+| POST | `/appointments` | Create appointment (session + member) |
+| GET | `/appointments` | List appointments (session + member, optional `?date=`) |
+| GET | `/appointments/availability` | Check available slots (session + member) |
+| PATCH | `/appointments/{id}/status` | Update appointment status (session + member + CSRF) |
+| GET | `/calls` | Get call logs (session + member) |
+| GET | `/config` | Get business config (session + member) |
+| GET | `/stats` | Dashboard statistics (session + member) |
 
 ### Health & Debug
 
@@ -545,7 +551,7 @@ Detailed lifecycle:
 | GET | `/debug/ai` | Test AI provider connectivity |
 | GET | `/debug/voice` | Test full voice handler response |
 
-> Tenant-aware endpoints read the `X-Business-Id` header to scope data. Without it they fall back to single-tenant mode using `business_config.json`.
+> Tenant-aware dashboard endpoints require `X-Business-Id` and an authenticated session.
 
 ---
 
@@ -586,10 +592,26 @@ PORT=8000
 # CORS (comma-separated origins; omit for wildcard *)
 ALLOWED_ORIGINS=https://your-frontend.com
 
+# Secure cookie session
+COOKIE_SECURE=true                        # true in production HTTPS
+COOKIE_SAMESITE=lax                       # lax | strict | none
+ACCESS_COOKIE_MAX_AGE=3600               # seconds
+REFRESH_COOKIE_MAX_AGE=2592000           # seconds
+
 # Logging
 LOG_LEVEL=INFO                           # DEBUG | INFO | WARNING | ERROR
 LOG_FORMAT=text                          # text | json
 ```
+
+### Security Notes
+
+- Frontend session state now relies on secure HttpOnly cookies instead of localStorage tokens.
+- CSRF protection uses double-submit token validation: cookie + `X-CSRF-Token` header.
+- Sign-up/sign-in errors are normalized with safe, user-facing messages for common edge cases:
+  - existing user on signup
+  - invalid credentials on signin
+  - weak password validation
+  - transient auth service failures
 
 ### Business Config (single-tenant fallback)
 

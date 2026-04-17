@@ -14,6 +14,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from typing import List, Optional, Tuple
 import os
+import secrets
+from pathlib import Path
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -42,7 +44,8 @@ from signalwire_service import get_signalwire_service
 from auth import (
     require_auth, require_business_access, require_business_admin,
     sign_up, sign_in, create_business_for_user, add_business_member,
-    get_current_user_id
+    get_user_profile, update_user_profile, update_user_password,
+    refresh_session, session_cookie_names
 )
 from tenant import get_business_config
 from logging_config import configure_logging, get_logger
@@ -88,7 +91,7 @@ app.add_middleware(
     allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Business-Id"],
+    allow_headers=["Authorization", "Content-Type", "X-Business-Id", "X-CSRF-Token"],
 )
 
 
@@ -99,30 +102,13 @@ configure_logging()
 load_config()
 
 
-# ============ Static Files & Frontend ============
+# ============ Static Files & Frontend (React SPA) ============
 
-@app.get("/")
-async def root():
-    """Serve the frontend HTML file."""
-    if os.path.exists("index.html"):
-        return FileResponse("index.html")
-    return {"message": "AI Voice Receptionist API", "status": "running"}
+FRONTEND_DIR = Path(__file__).parent / "frontend" / "dist"
 
-
-@app.get("/style.css")
-async def get_css():
-    """Serve CSS file."""
-    if os.path.exists("style.css"):
-        return FileResponse("style.css", media_type="text/css")
-    raise HTTPException(status_code=404, detail="CSS file not found")
-
-
-@app.get("/script.js")
-async def get_js():
-    """Serve JavaScript file."""
-    if os.path.exists("script.js"):
-        return FileResponse("script.js", media_type="application/javascript")
-    raise HTTPException(status_code=404, detail="JavaScript file not found")
+# Mount Vite-built static assets (JS, CSS, images, etc.)
+if FRONTEND_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="static-assets")
 
 
 # ============ Auth Endpoints ============
@@ -131,10 +117,21 @@ class SignUpRequest(BaseModel):
     email: str
     password: str
     full_name: str = ""
+    business_name: str
 
 class SignInRequest(BaseModel):
     email: str
     password: str
+
+
+class UpdateProfileRequest(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+
+
+class UpdatePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 class CreateBusinessRequest(BaseModel):
     business_name: str
@@ -172,55 +169,196 @@ class AddMemberRequest(BaseModel):
     role: str = "staff"
 
 
+_SESSION_COOKIES = session_cookie_names()
+
+
+def _cookie_secure() -> bool:
+    return os.getenv("COOKIE_SECURE", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _cookie_samesite() -> str:
+    value = os.getenv("COOKIE_SAMESITE", "lax").strip().lower()
+    if value not in {"lax", "strict", "none"}:
+        return "lax"
+    return value
+
+
+def _set_session_cookies(response: Response, auth_result: dict) -> None:
+    secure = _cookie_secure()
+    same_site = _cookie_samesite()
+
+    access_token = auth_result.get("access_token")
+    refresh_token = auth_result.get("refresh_token")
+
+    if access_token:
+        response.set_cookie(
+            key=_SESSION_COOKIES["access"],
+            value=access_token,
+            httponly=True,
+            secure=secure,
+            samesite=same_site,
+            max_age=int(os.getenv("ACCESS_COOKIE_MAX_AGE", "3600")),
+            path="/",
+        )
+
+    if refresh_token:
+        response.set_cookie(
+            key=_SESSION_COOKIES["refresh"],
+            value=refresh_token,
+            httponly=True,
+            secure=secure,
+            samesite=same_site,
+            max_age=int(os.getenv("REFRESH_COOKIE_MAX_AGE", "2592000")),
+            path="/",
+        )
+
+    response.set_cookie(
+        key=_SESSION_COOKIES["csrf"],
+        value=secrets.token_urlsafe(32),
+        httponly=False,
+        secure=secure,
+        samesite=same_site,
+        max_age=int(os.getenv("REFRESH_COOKIE_MAX_AGE", "2592000")),
+        path="/",
+    )
+
+
+def _clear_session_cookies(response: Response) -> None:
+    secure = _cookie_secure()
+    same_site = _cookie_samesite()
+    for cookie_name in _SESSION_COOKIES.values():
+        response.delete_cookie(cookie_name, path="/", samesite=same_site, secure=secure)
+
+
+def _csrf_valid(request: Request) -> bool:
+    csrf_cookie = request.cookies.get(_SESSION_COOKIES["csrf"], "")
+    csrf_header = request.headers.get("x-csrf-token", "")
+    return bool(csrf_cookie and csrf_header and csrf_cookie == csrf_header)
+
+
+def _public_auth_payload(auth_result: dict) -> dict:
+    businesses = auth_result.get("businesses", [])
+    return {
+        "success": True,
+        "user": {
+            "user_id": auth_result.get("user_id"),
+            "email": auth_result.get("email"),
+            "full_name": auth_result.get("full_name", ""),
+        },
+        "businesses": businesses,
+        "current_business_id": auth_result.get("current_business_id"),
+        "needs_email_verification": bool(auth_result.get("needs_email_verification", False)),
+    }
+
+
 @app.post("/auth/signup")
 @limiter.limit("10/minute")
-async def auth_signup(request: Request, req: SignUpRequest):
-    """Register a new user via Supabase Auth."""
+async def auth_signup(request: Request, response: Response, req: SignUpRequest):
+    """Register a new user, auto-create their business, and start a secure session when available."""
     try:
         result = sign_up(req.email, req.password, req.full_name)
-        return result
+
+        business = create_business_for_user(
+            user_id=result["user_id"],
+            business_name=req.business_name,
+            email=req.email,
+        )
+        result["businesses"] = [
+            {
+                "business_id": business["id"],
+                "role": "owner",
+                "business_name": business["name"],
+            }
+        ]
+        result["current_business_id"] = business["id"]
+
+        if result.get("access_token") and result.get("refresh_token"):
+            _set_session_cookies(response, result)
+
+        return _public_auth_payload(result)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as exc:
+        logger.exception("Signup failed")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "SIGNUP_FAILED",
+                "message": "Unable to complete sign up right now. Please try again.",
+            },
+        ) from exc
 
 
 @app.post("/auth/signin")
 @limiter.limit("20/minute")
-async def auth_signin(request: Request, req: SignInRequest):
-    """Sign in and receive access + refresh tokens, plus business memberships."""
+async def auth_signin(request: Request, response: Response, req: SignInRequest):
+    """Sign in, set secure session cookies, and return user/business context."""
     try:
         result = sign_in(req.email, req.password)
-        return result
+        _set_session_cookies(response, result)
+        return _public_auth_payload(result)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as exc:
+        logger.exception("Signin failed")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "SIGNIN_FAILED",
+                "message": "Unable to sign in right now. Please try again.",
+            },
+        ) from exc
+
+
+@app.post("/auth/refresh")
+@limiter.limit("30/minute")
+async def auth_refresh(request: Request, response: Response):
+    """Refresh access session using secure refresh-token cookie."""
+    if not _csrf_valid(request):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "CSRF_TOKEN_INVALID", "message": "Security verification failed."},
+        )
+
+    refresh_token_value = request.cookies.get(_SESSION_COOKIES["refresh"], "")
+    result = refresh_session(refresh_token_value)
+    _set_session_cookies(response, result)
+    return _public_auth_payload(result)
+
+
+@app.post("/auth/logout")
+async def auth_logout(request: Request, response: Response):
+    """Clear all auth/session cookies and terminate dashboard session."""
+    csrf_cookie = request.cookies.get(_SESSION_COOKIES["csrf"], "")
+    if csrf_cookie and not _csrf_valid(request):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "CSRF_TOKEN_INVALID", "message": "Security verification failed."},
+        )
+
+    _clear_session_cookies(response)
+    return {"success": True, "message": "Logged out successfully."}
 
 
 @app.get("/auth/me")
 async def auth_me(user_id: str = Depends(require_auth)):
-    """Get current user profile and business memberships."""
-    from supabase_client import get_supabase
-    sb = get_supabase()
+    """Get current user profile and memberships for dashboard identity/status."""
+    profile_data = get_user_profile(user_id)
+    return {"success": True, **profile_data}
 
-    profile = sb.table("profiles").select("*").eq("id", user_id).execute()
-    memberships = sb.table("business_memberships").select(
-        "business_id, role, businesses(id, name)"
-    ).eq("user_id", user_id).execute()
 
-    return {
-        "user_id": user_id,
-        "profile": profile.data[0] if profile.data else None,
-        "businesses": [
-            {
-                "business_id": m["business_id"],
-                "role": m["role"],
-                "business_name": m["businesses"]["name"] if m.get("businesses") else None
-            }
-            for m in memberships.data
-        ] if memberships.data else []
-    }
+@app.patch("/auth/profile")
+async def auth_profile_update(req: UpdateProfileRequest, user_id: str = Depends(require_auth)):
+    """Update current user's profile details (name/email)."""
+    updated = update_user_profile(user_id, req.full_name, req.email)
+    return {"success": True, **updated}
+
+
+@app.patch("/auth/password")
+async def auth_password_update(req: UpdatePasswordRequest, user_id: str = Depends(require_auth)):
+    """Change current user's password."""
+    result = update_user_password(user_id, req.current_password, req.new_password)
+    return result
 
 
 @app.post("/auth/business")
@@ -559,37 +697,51 @@ async def debug_voice():
 
 @app.post("/chat", response_model=ChatResponse)
 @limiter.limit("60/minute")
-async def chat(http_request: Request, request: ChatRequest):
+async def chat(
+    request: Request,
+    chat_request: ChatRequest,
+    access: Tuple[str, str] = Depends(require_business_access),
+):
     """
-    Handle chat messages from users (web interface).
-    If authenticated with X-Business-Id, uses tenant-scoped config.
-    Otherwise falls back to default config (backward compat).
+    Handle chat messages from signed-in users in a tenant-scoped context.
     """
     try:
-        # Try to extract business context (optional for chat)
-        business_id = http_request.headers.get("x-business-id")
+        _, business_id = access
         receptionist = ReceptionistAI(business_id=business_id)
 
         result = receptionist.handle_message(
-            message=request.message,
-            conversation_history=request.conversation_history
+            message=chat_request.message,
+            conversation_history=chat_request.conversation_history
         )
 
         return ChatResponse(
             message=result["message"],
             intent=result["intent"]
         )
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        error_message = str(e)
+        status_code = 503 if "must be set" in error_message.lower() else 500
+        return JSONResponse(
+            status_code=status_code,
+            content={"detail": f"Error processing chat: {error_message}"},
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
+        logger.exception("Error processing chat")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Error processing chat: {str(e)}"},
+        )
 
 
 # ============ Services Endpoints ============
 
 @app.get("/services")
-async def get_services(request: Request):
+async def get_services(access: Tuple[str, str] = Depends(require_business_access)):
     """Get list of available services (tenant-aware)."""
     try:
-        business_id = request.headers.get("x-business-id")
+        _, business_id = access
         config = get_business_config(business_id)
         return {
             "services": [
@@ -637,10 +789,13 @@ async def book_appointment(request: BookingRequest):
 
 
 @app.post("/appointments")
-async def create_new_appointment(data: AppointmentCreate, request: Request):
+async def create_new_appointment(
+    data: AppointmentCreate,
+    access: Tuple[str, str] = Depends(require_business_access),
+):
     """Create a new appointment (tenant-aware)."""
     try:
-        business_id = request.headers.get("x-business-id")
+        _, business_id = access
         config = get_business_config(business_id)
 
         # Find service and get duration
@@ -680,10 +835,14 @@ async def create_new_appointment(data: AppointmentCreate, request: Request):
 
 
 @app.get("/appointments")
-async def list_appointments(request: Request, date: Optional[str] = None, limit: int = 50):
+async def list_appointments(
+    date: Optional[str] = None,
+    limit: int = 50,
+    access: Tuple[str, str] = Depends(require_business_access),
+):
     """Get appointments, optionally filtered by date (tenant-aware)."""
     try:
-        business_id = request.headers.get("x-business-id")
+        _, business_id = access
         if date:
             appointments = get_appointments_for_date(date, business_id=business_id)
         else:
@@ -695,10 +854,14 @@ async def list_appointments(request: Request, date: Optional[str] = None, limit:
 
 
 @app.get("/appointments/availability")
-async def check_availability(request: Request, date: str, service: Optional[str] = None):
+async def check_availability(
+    date: str,
+    service: Optional[str] = None,
+    access: Tuple[str, str] = Depends(require_business_access),
+):
     """Check available time slots for a date (tenant-aware)."""
     try:
-        business_id = request.headers.get("x-business-id")
+        _, business_id = access
         config = get_business_config(business_id)
 
         # Get day of week
@@ -730,14 +893,21 @@ async def check_availability(request: Request, date: str, service: Optional[str]
 
 
 @app.patch("/appointments/{appointment_id}/status")
-async def update_appointment(appointment_id: int, status: str):
+async def update_appointment(
+    appointment_id: int,
+    status: str,
+    access: Tuple[str, str] = Depends(require_business_access),
+):
     """Update appointment status."""
     try:
+        _, business_id = access
         status_enum = AppointmentStatus(status)
-        update_appointment_status(appointment_id, status_enum)
+        update_appointment_status(appointment_id, status_enum, business_id=business_id)
         return {"success": True, "message": f"Appointment status updated to {status}"}
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+    except ValueError as exc:
+        if str(exc) == "Appointment not found":
+            raise HTTPException(status_code=404, detail="Appointment not found") from exc
+        raise HTTPException(status_code=400, detail=f"Invalid status: {status}") from exc
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -757,10 +927,13 @@ async def get_bookings():
 # ============ Call Logs Endpoints ============
 
 @app.get("/calls")
-async def get_calls(request: Request, limit: int = 50):
+async def get_calls(
+    limit: int = 50,
+    access: Tuple[str, str] = Depends(require_business_access),
+):
     """Get call logs (tenant-aware)."""
     try:
-        business_id = request.headers.get("x-business-id")
+        _, business_id = access
         calls = get_call_logs(limit, business_id=business_id)
         return {"calls": [call.model_dump() for call in calls]}
     except Exception as e:
@@ -770,10 +943,10 @@ async def get_calls(request: Request, limit: int = 50):
 # ============ Config Endpoints ============
 
 @app.get("/config")
-async def get_business_config_endpoint(request: Request):
+async def get_business_config_endpoint(access: Tuple[str, str] = Depends(require_business_access)):
     """Get business configuration (tenant-aware)."""
     try:
-        business_id = request.headers.get("x-business-id")
+        _, business_id = access
         config = get_business_config(business_id)
         return {
             "business_name": config.business_name,
@@ -854,10 +1027,10 @@ async def health_check():
 # ============ Dashboard Stats ============
 
 @app.get("/stats")
-async def get_stats(request: Request):
+async def get_stats(access: Tuple[str, str] = Depends(require_business_access)):
     """Get dashboard statistics (tenant-aware)."""
     try:
-        business_id = request.headers.get("x-business-id")
+        _, business_id = access
         appointments = get_all_appointments(100, business_id=business_id)
         calls = get_call_logs(100, business_id=business_id)
 
@@ -876,6 +1049,20 @@ async def get_stats(request: Request):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ SPA Catch-All (MUST be last route) ============
+
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    """Serve React SPA index.html for all non-API routes (client-side routing)."""
+    index = FRONTEND_DIR / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return JSONResponse(
+        content={"message": "Frontend not built. Run: cd frontend && npm run build"},
+        status_code=503,
+    )
 
 
 if __name__ == "__main__":
