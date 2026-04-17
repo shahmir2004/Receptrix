@@ -6,7 +6,9 @@ import {
   Settings,
   Phone,
   LogOut,
+  ArrowLeft,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 
@@ -96,6 +98,15 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
               : 'No business assigned'}
           </p>
         </div>
+
+        {/* Back to Landing Page */}
+        <Link
+          to="/"
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-white/50 hover:bg-white/[0.05] hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back to Home</span>
+        </Link>
 
         {/* Logout */}
         <button

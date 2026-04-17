@@ -7,16 +7,16 @@ import { fadeUp } from '@/lib/animations';
 import SignUpForm from '@/components/auth/SignUpForm';
 
 export default function SignUpPage() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isLoggingOut } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    if (!isLoading && !isLoggingOut && isAuthenticated) {
       navigate('/dashboard', { replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, isLoading, isLoggingOut, navigate]);
 
-  if (isLoading) {
+  if (isLoading || isLoggingOut) {
     return <div className="min-h-screen bg-black" />;
   }
 

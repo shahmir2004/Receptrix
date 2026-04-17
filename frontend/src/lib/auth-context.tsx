@@ -21,6 +21,7 @@ interface AuthContextValue {
   currentBusinessId: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isLoggingOut: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, businessName: string, email: string, password: string) => Promise<{ success: boolean; needsVerification?: boolean }>;
   logout: () => Promise<void>;
@@ -56,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -169,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    setIsLoggingOut(true);
     try {
       await fetch(`${window.location.origin}/auth/logout`, {
         method: 'POST',
@@ -181,6 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearAuth();
       toast.show('You have been logged out.', 'info');
       navigate('/');
+      setIsLoggingOut(false);
     }
   }, [clearAuth, navigate, toast]);
 
@@ -236,6 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         currentBusinessId,
         isAuthenticated,
         isLoading,
+        isLoggingOut,
         login,
         signup,
         logout,

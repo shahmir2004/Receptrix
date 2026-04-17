@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { useScrollEffect } from '@/hooks/use-scroll-effect';
 import { Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/lib/auth-context';
 
 const navLinks = [
   { label: 'Features', href: '#features' },
@@ -15,6 +16,7 @@ const navLinks = [
 export default function Navbar() {
   const scrolled = useScrollEffect(50);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { isAuthenticated } = useAuth();
 
   function handleAnchorClick(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
     e.preventDefault();
@@ -60,18 +62,29 @@ export default function Navbar() {
 
           {/* Desktop CTAs */}
           <div className="hidden md:flex items-center gap-2">
-            <Link
-              to="/signin"
-              className="text-[13px] text-white/50 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-white/[0.04]"
-            >
-              Sign In
-            </Link>
-            <Link
-              to="/signup"
-              className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-[13px] px-4 py-2 rounded-xl transition-all duration-200 shadow-[0_0_16px_rgba(99,102,241,0.25)] hover:shadow-[0_0_24px_rgba(99,102,241,0.4)]"
-            >
-              Get Started
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                to="/dashboard"
+                className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-[13px] px-4 py-2 rounded-xl transition-all duration-200 shadow-[0_0_16px_rgba(99,102,241,0.25)] hover:shadow-[0_0_24px_rgba(99,102,241,0.4)]"
+              >
+                Go to Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/signin"
+                  className="text-[13px] text-white/50 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-white/[0.04]"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  to="/signup"
+                  className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-[13px] px-4 py-2 rounded-xl transition-all duration-200 shadow-[0_0_16px_rgba(99,102,241,0.25)] hover:shadow-[0_0_24px_rgba(99,102,241,0.4)]"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile hamburger */}
@@ -116,20 +129,32 @@ export default function Navbar() {
               transition={{ delay: 0.32, duration: 0.28 }}
               className="flex flex-col items-center gap-4 mt-2"
             >
-              <Link
-                to="/signin"
-                onClick={() => setMobileOpen(false)}
-                className="text-base text-white/50 hover:text-white transition-colors"
-              >
-                Sign In
-              </Link>
-              <Link
-                to="/signup"
-                onClick={() => setMobileOpen(false)}
-                className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold px-8 py-3 rounded-2xl transition-all duration-200 shadow-[0_0_24px_rgba(99,102,241,0.3)]"
-              >
-                Get Started
-              </Link>
+              {isAuthenticated ? (
+                <Link
+                  to="/dashboard"
+                  onClick={() => setMobileOpen(false)}
+                  className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold px-8 py-3 rounded-2xl transition-all duration-200 shadow-[0_0_24px_rgba(99,102,241,0.3)]"
+                >
+                  Go to Dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/signin"
+                    onClick={() => setMobileOpen(false)}
+                    className="text-base text-white/50 hover:text-white transition-colors"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    to="/signup"
+                    onClick={() => setMobileOpen(false)}
+                    className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold px-8 py-3 rounded-2xl transition-all duration-200 shadow-[0_0_24px_rgba(99,102,241,0.3)]"
+                  >
+                    Get Started
+                  </Link>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}
