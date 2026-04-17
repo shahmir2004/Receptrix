@@ -15,7 +15,7 @@ import StickyScroll from '@/components/ui/sticky-scroll';
 export default function LandingPage() {
   return (
     <ReactLenis root>
-      <div className="min-h-screen bg-black text-white overflow-x-hidden">
+      <div className="min-h-screen bg-black text-white overflow-x-clip">
         <Navbar />
         <main>
           <Hero />

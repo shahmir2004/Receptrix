@@ -150,20 +150,20 @@ const StickyScroll = forwardRef<HTMLElement>((_props, ref) => {
       {/* Intro heading */}
       <div className='w-full bg-black grid place-content-center h-screen relative overflow-hidden'>
         <div className='absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]' />
-        <h2 className='2xl:text-7xl text-5xl px-8 font-semibold text-center tracking-tight leading-[120%] relative z-10'>
+        <h2 className='2xl:text-7xl text-4xl sm:text-5xl px-6 sm:px-8 font-semibold text-center tracking-tight leading-[120%] relative z-10'>
           Works for Every
           <br />
           Kind of Business
           <br />
-          <span className='text-slate-400 text-3xl font-normal mt-2 block'>Scroll to explore →</span>
+          <span className='text-slate-400 text-xl sm:text-3xl font-normal mt-2 block'>Scroll to explore →</span>
         </h2>
       </div>
 
-      {/* 3-column sticky scroll grid */}
-      <div className='grid grid-cols-12 gap-4 px-4 pb-4'>
+      {/* 3-column sticky scroll grid (stacks on mobile) */}
+      <div className='grid grid-cols-1 lg:grid-cols-12 gap-4 px-4 pb-4'>
 
         {/* Left — industries */}
-        <div className='grid gap-4 col-span-4'>
+        <div className='grid gap-4 lg:col-span-4'>
           {industryCards.map((card) => (
             <div key={card.title} className='h-96'>
               <GradientCard {...card} />
@@ -171,15 +171,15 @@ const StickyScroll = forwardRef<HTMLElement>((_props, ref) => {
           ))}
         </div>
 
-        {/* Middle — features (sticky) */}
-        <div className='sticky top-0 h-screen col-span-4 grid grid-rows-3 gap-4'>
+        {/* Middle — features (sticky on lg+, inline grid on mobile) */}
+        <div className='grid grid-rows-3 gap-4 lg:col-span-4 lg:sticky lg:top-0 lg:h-screen min-h-[72rem] lg:min-h-0'>
           {featureCards.map((card) => (
             <GradientCard key={card.title} {...card} />
           ))}
         </div>
 
         {/* Right — outcomes */}
-        <div className='grid gap-4 col-span-4'>
+        <div className='grid gap-4 lg:col-span-4'>
           {outcomeCards.map((card) => (
             <div key={card.title} className='h-96'>
               <GradientCard {...card} />
