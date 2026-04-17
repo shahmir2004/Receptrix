@@ -1,5 +1,5 @@
 'use client';
-import React, { forwardRef } from 'react';
+import { forwardRef } from 'react';
 import { GradientCard } from '@/components/ui/gradient-card';
 
 // ── Left column: Industries Receptrix serves ─────────────────────────────────
@@ -144,7 +144,7 @@ const outcomeCards = [
   },
 ];
 
-const StickyScroll = forwardRef<HTMLElement>((props, ref) => {
+const StickyScroll = forwardRef<HTMLElement>((_props, ref) => {
   return (
     <section className='text-white w-full bg-black' ref={ref}>
       {/* Intro heading */}

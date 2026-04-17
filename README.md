@@ -686,10 +686,24 @@ For multi-tenant routing, add a row to the `phone_number_mappings` table mapping
 
 ### Render
 
-A `render.yaml` is included. Start command:
+A `render.yaml` is included.
+
+Build command:
+
+```
+pip install -r requirements.txt && cd frontend && npm ci && npm run build
+```
+
+Start command:
 
 ```
 uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+If the frontend build step is skipped, the backend serves a 503 fallback message:
+
+```
+Frontend not built. Run: cd frontend && npm run build
 ```
 
 Set all environment variables in the Render dashboard under **Environment**.

@@ -209,7 +209,7 @@ export function AppointmentModal({ open, onOpenChange, onCreated }: AppointmentM
                 Loading services...
               </div>
             ) : (
-              <Select value={service} onValueChange={setService} required>
+              <Select value={service} onValueChange={(value) => setService(value ?? '')} required>
                 <SelectTrigger className="w-full bg-black/50 border-white/10 text-white">
                   <SelectValue placeholder="Select a service" />
                 </SelectTrigger>
@@ -257,7 +257,7 @@ export function AppointmentModal({ open, onOpenChange, onCreated }: AppointmentM
                 No slots available for this date
               </p>
             ) : (
-              <Select value={time} onValueChange={setTime} required>
+              <Select value={time} onValueChange={(value) => setTime(value ?? '')} required>
                 <SelectTrigger className="w-full bg-black/50 border-white/10 text-white">
                   <SelectValue placeholder="Select a time" />
                 </SelectTrigger>

@@ -207,7 +207,7 @@ export function BusinessInfoForm() {
 
           <div className="space-y-2">
             <Label className="text-white/70">Timezone</Label>
-            <Select value={timezone} onValueChange={setTimezone}>
+            <Select value={timezone} onValueChange={(value) => setTimezone(value ?? 'Asia/Karachi')}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select timezone" />
               </SelectTrigger>

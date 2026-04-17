@@ -45,7 +45,7 @@ export function AppointmentFilters({ onFilterChange, filters }: AppointmentFilte
           onValueChange={(val) =>
             onFilterChange({
               ...filters,
-              status: val === 'all' ? undefined : val,
+              status: val && val !== 'all' ? val : undefined,
             })
           }
         >
