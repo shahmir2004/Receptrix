@@ -79,6 +79,11 @@ def _is_invalid_credentials_error(message: str) -> bool:
     )
 
 
+def _is_email_not_confirmed_error(message: str) -> bool:
+    lowered = message.lower()
+    return "email not confirmed" in lowered or "email_not_confirmed" in lowered
+
+
 def _is_invalid_email_error(message: str) -> bool:
     lowered = message.lower()
     return "invalid email" in lowered or "email address" in lowered
@@ -113,6 +118,8 @@ def _map_auth_error(exc: Exception, operation: str) -> HTTPException:
         return _http_error(400, "SIGNUP_FAILED", f"Sign-up failed: {message}")
 
     if operation == "signin":
+        if _is_email_not_confirmed_error(message):
+            return _http_error(403, "EMAIL_NOT_VERIFIED", "Please verify your email before signing in.")
         if _is_invalid_credentials_error(message):
             return _http_error(401, "INVALID_CREDENTIALS", "Invalid email or password.")
         return _http_error(503, "SIGNIN_FAILED", "Unable to sign in right now. Please try again.")
@@ -479,6 +486,17 @@ def sign_in(email: str, password: str) -> dict[str, Any]:
         "businesses": memberships,
         "current_business_id": current_business_id,
     }
+
+
+def resend_verification_email(email: str) -> None:
+    """Ask Supabase to resend the email confirmation link."""
+    normalized_email = normalize_email(email)
+    try:
+        sb = get_supabase()
+        sb.auth.resend({"type": "signup", "email": normalized_email})
+    except Exception as exc:
+        message = _extract_error_message(exc)
+        raise _http_error(400, "RESEND_FAILED", f"Could not resend verification email: {message}") from exc
 
 
 def refresh_session(refresh_token: str) -> dict[str, Any]:

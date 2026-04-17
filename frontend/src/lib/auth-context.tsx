@@ -134,6 +134,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         applyAuthPayload(data);
         return true;
       }
+      const detail = data?.detail as Record<string, unknown> | null;
+      const code = detail?.code as string | undefined;
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        throw new Error('EMAIL_NOT_VERIFIED');
+      }
       throw new Error(getErrorMessage(data, 'Sign in failed'));
     },
     [applyAuthPayload]

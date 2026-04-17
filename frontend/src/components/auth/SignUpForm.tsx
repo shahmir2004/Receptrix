@@ -12,6 +12,7 @@ export default function SignUpForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
   const { signup } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -39,8 +40,7 @@ export default function SignUpForm() {
       const result = await signup(fullName, businessName, email, password);
 
       if (result.needsVerification) {
-        toast.show('Please verify your email, then sign in.', 'info');
-        navigate('/signin');
+        setVerificationSent(true);
       } else {
         toast.show('Account created! Welcome to Receptrix.', 'success');
         navigate('/dashboard');
@@ -56,6 +56,28 @@ export default function SignUpForm() {
 
   const inputClasses =
     'h-10 rounded-xl border-white/[0.07] bg-white/[0.03] text-white placeholder:text-white/30 focus-visible:border-indigo-500/50 focus-visible:ring-indigo-500/20';
+
+  if (verificationSent) {
+    return (
+      <div className="flex flex-col gap-5">
+        <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-5 flex flex-col gap-3 text-center">
+          <div className="text-2xl">📧</div>
+          <p className="text-white font-semibold">Check your inbox</p>
+          <p className="text-white/60 text-sm">
+            A confirmation email has been sent to <span className="text-white/80 font-medium">{email}</span>.
+            Please verify your email before signing in.
+          </p>
+        </div>
+        <Button
+          type="button"
+          onClick={() => navigate('/signin')}
+          className="h-10 w-full rounded-xl bg-indigo-500 text-white font-semibold hover:bg-indigo-600 transition-colors cursor-pointer"
+        >
+          Go to Sign In
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">

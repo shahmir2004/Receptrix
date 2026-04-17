@@ -45,7 +45,7 @@ from auth import (
     require_auth, require_business_access, require_business_admin,
     sign_up, sign_in, create_business_for_user, add_business_member,
     get_user_profile, update_user_profile, update_user_password,
-    refresh_session, session_cookie_names
+    refresh_session, session_cookie_names, resend_verification_email
 )
 from tenant import get_business_config
 from logging_config import configure_logging, get_logger
@@ -122,6 +122,9 @@ class SignUpRequest(BaseModel):
 class SignInRequest(BaseModel):
     email: str
     password: str
+
+class ResendVerificationRequest(BaseModel):
+    email: str
 
 
 class UpdateProfileRequest(BaseModel):
@@ -307,6 +310,23 @@ async def auth_signin(request: Request, response: Response, req: SignInRequest):
                 "code": "SIGNIN_FAILED",
                 "message": "Unable to sign in right now. Please try again.",
             },
+        ) from exc
+
+
+@app.post("/auth/resend-verification")
+@limiter.limit("2/minute")
+async def auth_resend_verification(request: Request, req: ResendVerificationRequest):
+    """Resend email verification link. Rate-limited to prevent abuse."""
+    try:
+        resend_verification_email(req.email)
+        return {"success": True, "message": "Verification email sent. Please check your inbox."}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Resend verification failed")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "RESEND_FAILED", "message": "Unable to resend verification email."},
         ) from exc
 
 
