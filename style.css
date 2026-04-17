@@ -2434,3 +2434,296 @@ a:hover { color: var(--primary-light); }
         font-size: 32px;
     }
 }
+
+/* ============================================
+   MOBILE APP HEADER & BOTTOM NAV
+   ============================================ */
+.mobile-app-header {
+    display: none;
+}
+
+.mobile-bottom-nav {
+    display: none;
+}
+
+@media (max-width: 480px) {
+    /* Mobile App Header */
+    .mobile-app-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 200;
+        height: 56px;
+        padding: 0 16px;
+        background: var(--bg-glass);
+        backdrop-filter: var(--glass-blur) var(--glass-saturate);
+        -webkit-backdrop-filter: var(--glass-blur) var(--glass-saturate);
+        border-bottom: 1px solid var(--border-glass);
+    }
+
+    .mobile-back-home {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        border-radius: var(--radius-xs);
+        transition: color var(--transition);
+    }
+
+    .mobile-back-home:hover {
+        color: var(--primary);
+    }
+
+    .mobile-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.3px;
+    }
+
+    .mobile-brand svg {
+        color: var(--primary);
+    }
+
+    .mobile-theme-btn {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        border-radius: var(--radius-xs);
+        transition: color var(--transition);
+    }
+
+    .mobile-theme-btn:hover {
+        color: var(--primary);
+    }
+
+    /* Mobile Bottom Nav */
+    .mobile-bottom-nav {
+        display: block;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 200;
+        background: var(--bg-glass);
+        backdrop-filter: var(--glass-blur) var(--glass-saturate);
+        -webkit-backdrop-filter: var(--glass-blur) var(--glass-saturate);
+        border-top: 1px solid var(--border-glass);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .mobile-nav-list {
+        list-style: none;
+        display: flex;
+        padding: 0;
+        margin: 0;
+    }
+
+    .mobile-bottom-nav .nav-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 10px 4px 8px;
+        cursor: pointer;
+        color: var(--text-muted);
+        transition: color var(--transition);
+        border-radius: 0;
+        background: none;
+        position: static;
+        overflow: visible;
+        font-size: 10px;
+        font-weight: 500;
+    }
+
+    .mobile-bottom-nav .nav-item::before {
+        display: none;
+    }
+
+    .mobile-bottom-nav .nav-item:hover,
+    .mobile-bottom-nav .nav-item.active {
+        background: none;
+        color: var(--primary);
+        box-shadow: none;
+    }
+
+    .mobile-bottom-nav .nav-item .nav-icon {
+        width: 24px;
+        height: 24px;
+    }
+
+    .mobile-bottom-nav .nav-item .nav-icon svg {
+        width: 22px;
+        height: 22px;
+    }
+
+    .mobile-nav-label {
+        font-size: 10px;
+        font-weight: 500;
+        line-height: 1;
+    }
+
+    /* Push main content down/up to avoid overlap with fixed bars */
+    .main-content {
+        padding-top: 72px;
+        padding-bottom: 80px;
+    }
+
+    /* Toast: full-width, above bottom nav */
+    .toast-container {
+        top: auto;
+        bottom: 75px;
+        left: 12px;
+        right: 12px;
+    }
+
+    .toast {
+        min-width: unset;
+        width: 100%;
+        max-width: 100%;
+    }
+}
+
+/* ============================================
+   ADDITIONAL MOBILE POLISH
+   ============================================ */
+
+/* Touch-friendly smooth scrolling on iOS */
+.schedule-list,
+.calls-list,
+.chat-container,
+.table-container,
+.transcript-content,
+.sidebar {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Landing nav on small screens */
+@media (max-width: 480px) {
+    .landing-nav {
+        padding: 12px 16px;
+        gap: 8px;
+    }
+
+    .landing-logo {
+        font-size: 17px;
+    }
+
+    .landing-logo svg {
+        width: 22px;
+        height: 22px;
+    }
+
+    /* Hide the Dashboard CTA from landing nav — too crowded */
+    .landing-nav-actions .btn-cta.btn-small {
+        display: none;
+    }
+
+    .landing-nav-actions .btn-nav {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+
+    /* Smaller hero phone mockup */
+    .hero-phone-mockup {
+        width: 200px;
+        height: 200px;
+    }
+
+    .hero-icon-circle {
+        width: 72px;
+        height: 72px;
+    }
+
+    .hero-icon-circle svg {
+        width: 30px;
+        height: 30px;
+    }
+
+    /* Stacked hero buttons */
+    .hero-buttons {
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .hero-buttons .btn-cta,
+    .hero-buttons .btn-ghost {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Chat input — stack on very small screens */
+    .input-container {
+        flex-wrap: wrap;
+    }
+
+    .input-container input[type="text"] {
+        order: 1;
+        flex: 1 1 100%;
+    }
+
+    .btn-mic {
+        order: 0;
+    }
+
+    #send-button {
+        order: 2;
+        flex: 1;
+        justify-content: center;
+    }
+
+    /* Filters full-width on mobile */
+    .filters input,
+    .filters select {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    /* CTA section */
+    .cta-section {
+        padding: 60px 24px;
+    }
+
+    /* Landing footer */
+    .landing-footer {
+        padding: 24px 16px;
+    }
+
+    /* Modal: full height on very small screens */
+    .modal {
+        padding: 12px;
+        align-items: flex-end;
+    }
+
+    .modal-content {
+        max-height: 85vh;
+        border-radius: var(--radius) var(--radius) 0 0;
+    }
+
+    /* Auth card */
+    .auth-page {
+        padding: 16px;
+        align-items: flex-end;
+    }
+}
