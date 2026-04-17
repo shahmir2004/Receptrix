@@ -691,7 +691,7 @@ A `render.yaml` is included.
 Build command:
 
 ```
-pip install -r requirements.txt && cd frontend && npm ci && npm run build
+pip install -r requirements.txt && cd frontend && npm install && npm run build
 ```
 
 Start command:
