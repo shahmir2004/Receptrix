@@ -173,11 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     setIsLoggingOut(true);
     try {
-      await fetch(`${window.location.origin}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      await authedRequest('/auth/logout', { method: 'POST' });
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
