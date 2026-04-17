@@ -15,6 +15,7 @@ from slowapi.errors import RateLimitExceeded
 from typing import List, Optional, Tuple
 import os
 import secrets
+from pathlib import Path
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -101,30 +102,13 @@ configure_logging()
 load_config()
 
 
-# ============ Static Files & Frontend ============
+# ============ Static Files & Frontend (React SPA) ============
 
-@app.get("/")
-async def root():
-    """Serve the frontend HTML file."""
-    if os.path.exists("index.html"):
-        return FileResponse("index.html")
-    return {"message": "AI Voice Receptionist API", "status": "running"}
+FRONTEND_DIR = Path(__file__).parent / "frontend" / "dist"
 
-
-@app.get("/style.css")
-async def get_css():
-    """Serve CSS file."""
-    if os.path.exists("style.css"):
-        return FileResponse("style.css", media_type="text/css")
-    raise HTTPException(status_code=404, detail="CSS file not found")
-
-
-@app.get("/script.js")
-async def get_js():
-    """Serve JavaScript file."""
-    if os.path.exists("script.js"):
-        return FileResponse("script.js", media_type="application/javascript")
-    raise HTTPException(status_code=404, detail="JavaScript file not found")
+# Mount Vite-built static assets (JS, CSS, images, etc.)
+if FRONTEND_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIR / "assets")), name="static-assets")
 
 
 # ============ Auth Endpoints ============
@@ -1065,6 +1049,20 @@ async def get_stats(access: Tuple[str, str] = Depends(require_business_access)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ SPA Catch-All (MUST be last route) ============
+
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    """Serve React SPA index.html for all non-API routes (client-side routing)."""
+    index = FRONTEND_DIR / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return JSONResponse(
+        content={"message": "Frontend not built. Run: cd frontend && npm run build"},
+        status_code=503,
+    )
 
 
 if __name__ == "__main__":
