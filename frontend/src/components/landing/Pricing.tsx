@@ -4,26 +4,10 @@ import PricingCard from './PricingCard';
 
 const tiers = [
   {
-    name: 'Starter',
+    name: 'Trial',
     price: '$0',
     period: 'month',
     description: 'Perfect for trying out Receptrix',
-    features: [
-      '50 calls/month',
-      '1 phone number',
-      'Basic appointment booking',
-      'Email transcripts',
-      'Community support',
-    ],
-    ctaLabel: 'Get Started Free',
-    ctaTo: '/signup',
-  },
-  {
-    name: 'Pro',
-    price: '$49',
-    period: 'month',
-    description: 'For growing businesses that need more',
-    popular: true,
     features: [
       '500 calls/month',
       '3 phone numbers',
@@ -37,22 +21,41 @@ const tiers = [
     ctaTo: '/signup',
   },
   {
-    name: 'Business',
-    price: 'Custom',
-    description: 'For enterprises with complex needs',
+    name: 'Pro',
+    price: '$200',
+    period: 'month',
+    description: 'For growing businesses that need more',
+    popular: true,
     features: [
-      'Unlimited calls',
-      'Unlimited phone numbers',
-      'Multi-location support',
-      'Dedicated account manager',
-      'Custom AI training',
-      'SLA guarantee',
-      'API access',
+      '500 calls/month',
+      '3 phone numbers',
+      'Advanced booking + calendar sync',
+      'CRM integrations (HubSpot, Salesforce)',
+      'Custom voice & script',
+      'Analytics dashboard',
+      'Priority support',
     ],
-    ctaLabel: 'Contact Sales',
-    ctaTo: '#',
+    ctaLabel: 'Buy Now',
+    ctaTo: '/signup',
   },
+  // {
+  //   name: 'Business',
+  //   price: 'Custom',
+  //   description: 'For enterprises with complex needs',
+  //   features: [
+  //     'Unlimited calls',
+  //     'Unlimited phone numbers',
+  //     'Multi-location support',
+  //     'Dedicated account manager',
+  //     'Custom AI training',
+  //     'SLA guarantee',
+  //     'API access',
+  //   ],
+  //   ctaLabel: 'Contact Sales',
+  //   ctaTo: '#',
+  // },
 ];
+
 
 export default function Pricing() {
   return (
@@ -82,7 +85,7 @@ export default function Pricing() {
           initial="initial"
           whileInView="animate"
           viewport={{ once: true, margin: '-50px' }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start"
+          className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start"
         >
           {tiers.map((tier) => (
             <motion.div key={tier.name} variants={fadeUp}>
