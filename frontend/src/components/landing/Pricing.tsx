@@ -4,17 +4,18 @@ import PricingCard from './PricingCard';
 
 const tiers = [
   {
-    name: 'Trial',
-    price: '$0',
-    period: 'month',
-    description: 'Perfect for trying out Receptrix',
+    name: 'Free Trial',
+    price: '3 Days',
+    description: 'Try every Pro feature — no credit card required',
     features: [
+      'AI calling',
+      'Dashboard',
+      'Analytics',
       '500 calls/month',
       '3 phone numbers',
       'Advanced booking + calendar sync',
       'CRM integrations (HubSpot, Salesforce)',
       'Custom voice & script',
-      'Analytics dashboard',
       'Priority support',
     ],
     ctaLabel: 'Start Free Trial',
@@ -22,38 +23,24 @@ const tiers = [
   },
   {
     name: 'Pro',
-    price: '$200',
+    price: '$199.99',
     period: 'month',
     description: 'For growing businesses that need more',
     popular: true,
     features: [
+      'AI calling',
+      'Dashboard',
+      'Analytics',
       '500 calls/month',
       '3 phone numbers',
       'Advanced booking + calendar sync',
       'CRM integrations (HubSpot, Salesforce)',
       'Custom voice & script',
-      'Analytics dashboard',
       'Priority support',
     ],
-    ctaLabel: 'Buy Now',
+    ctaLabel: 'Get Pro',
     ctaTo: '/signup',
   },
-  // {
-  //   name: 'Business',
-  //   price: 'Custom',
-  //   description: 'For enterprises with complex needs',
-  //   features: [
-  //     'Unlimited calls',
-  //     'Unlimited phone numbers',
-  //     'Multi-location support',
-  //     'Dedicated account manager',
-  //     'Custom AI training',
-  //     'SLA guarantee',
-  //     'API access',
-  //   ],
-  //   ctaLabel: 'Contact Sales',
-  //   ctaTo: '#',
-  // },
 ];
 
 
