@@ -9,6 +9,7 @@ This module centralizes:
 - Profile and password update helpers
 """
 
+import os
 import re
 from datetime import datetime
 from typing import Any, Optional, Tuple
@@ -16,6 +17,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 
+from models import BusinessType, HEALTHCARE_BUSINESS_TYPES
 from supabase_client import get_supabase
 
 _ACCESS_COOKIE_NAME = "rx_access_token"
@@ -205,7 +207,7 @@ def _enforce_csrf_for_cookie_auth(request: Request) -> None:
 def _list_memberships(user_id: str) -> list[dict[str, Any]]:
     sb = get_supabase()
     memberships = sb.table("business_memberships").select(
-        "business_id, role, businesses(id, name)"
+        "business_id, role, businesses(id, name, business_type, hipaa_mode, billing_status)"
     ).eq("user_id", user_id).execute()
 
     return [
@@ -213,6 +215,9 @@ def _list_memberships(user_id: str) -> list[dict[str, Any]]:
             "business_id": m["business_id"],
             "role": m["role"],
             "business_name": m.get("businesses", {}).get("name") if m.get("businesses") else None,
+            "business_type": m.get("businesses", {}).get("business_type") if m.get("businesses") else None,
+            "hipaa_mode": bool(m.get("businesses", {}).get("hipaa_mode")) if m.get("businesses") else False,
+            "billing_status": m.get("businesses", {}).get("billing_status") if m.get("businesses") else None,
         }
         for m in (memberships.data or [])
     ]
@@ -393,6 +398,19 @@ async def require_business_access(request: Request) -> Tuple[str, str]:
     return user_id, business_id
 
 
+async def require_superuser(request: Request) -> str:
+    """FastAPI dependency — valid session + profiles.is_superuser = true."""
+    user_id = await require_auth(request)
+
+    sb = get_supabase()
+    result = sb.table("profiles").select("is_superuser").eq("id", user_id).limit(1).execute()
+
+    if not result.data or not result.data[0].get("is_superuser"):
+        raise _http_error(403, "SUPERUSER_REQUIRED", "Platform superuser access required.")
+
+    return user_id
+
+
 async def require_business_admin(request: Request) -> Tuple[str, str]:
     """FastAPI dependency — valid session + owner/admin role in X-Business-Id."""
     user_id, business_id = await require_business_access(request)
@@ -540,13 +558,25 @@ def create_business_for_user(
     phone: str = "",
     email: str = "",
     address: str = "",
-    timezone: str = "Asia/Karachi",
+    timezone: str = "",
     greeting_message: str = "",
     working_hours: Optional[dict] = None,
+    business_type: str = BusinessType.MEDICAL_CLINIC.value,
 ) -> dict[str, Any]:
     """Create a new business and assign the user as owner."""
     sb = get_supabase()
     _ensure_profile_exists(user_id)
+
+    normalized_business_type = (business_type or BusinessType.MEDICAL_CLINIC.value).strip().lower()
+    if normalized_business_type not in {item.value for item in BusinessType}:
+        raise _http_error(
+            422,
+            "INVALID_BUSINESS_TYPE",
+            "Business type must be one of: medical_clinic, dental_clinic, urgent_care, specialist_practice, mental_health, other_healthcare.",
+        )
+
+    default_timezone = os.getenv("DEFAULT_BUSINESS_TIMEZONE", "America/New_York")
+    hipaa_mode = normalized_business_type in HEALTHCARE_BUSINESS_TYPES
 
     now = datetime.now().isoformat()
     default_hours = {
@@ -573,10 +603,14 @@ def create_business_for_user(
         "phone": (phone or "").strip(),
         "email": resolved_email,
         "address": (address or "").strip(),
-        "timezone": (timezone or "Asia/Karachi").strip() or "Asia/Karachi",
+        "timezone": (timezone or default_timezone).strip() or default_timezone,
         "greeting_message": (greeting_message or "").strip()
         or "Thank you for calling. How may I assist you today?",
         "working_hours": working_hours or default_hours,
+        "business_type": normalized_business_type,
+        "hipaa_mode": hipaa_mode,
+        "billing_status": "pending",
+        "voice_features_enabled": False,
         "created_at": now,
         "updated_at": now,
     }

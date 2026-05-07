@@ -35,8 +35,8 @@ CREATE INDEX IF NOT EXISTS idx_call_logs_caller_id
 CREATE INDEX IF NOT EXISTS idx_call_logs_started_at
     ON call_logs (started_at DESC);
 
-COMMENT ON TABLE  call_logs                     IS 'Full call records including transcript and summary.';
-COMMENT ON COLUMN call_logs.call_sid            IS 'Twilio/SignalWire Call SID. Globally unique across all calls.';
+COMMENT ON TABLE  call_logs                     IS 'Call outcome records. Medical-clinic Vapi calls must not store transcripts or recordings.';
+COMMENT ON COLUMN call_logs.call_sid            IS 'Voice provider call id. Globally unique across all calls.';
 COMMENT ON COLUMN call_logs.call_status         IS 'Values mirror CallStatus enum in models.py.';
 COMMENT ON COLUMN call_logs.business_id         IS 'NULL allowed during Phase A for legacy data.';
 COMMENT ON COLUMN call_logs.appointment_created IS 'TRUE if this call resulted in a new appointment being booked.';

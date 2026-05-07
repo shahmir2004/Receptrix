@@ -30,15 +30,15 @@ const features = [
   },
   {
     icon: BarChart3,
-    title: 'Call Analytics',
+    title: 'Clinic Call Controls',
     description:
-      'Full transcripts, sentiment analysis, and performance reports for every call.',
+      'Track call outcomes, appointments booked, and handoff needs without storing medical call transcripts.',
   },
   {
     icon: Plug,
-    title: 'Seamless Integrations',
+    title: 'Live Clinic Data',
     description:
-      'Connects with Calendly, HubSpot, Salesforce, and your existing phone system.',
+      'Uses your Receptrix services, hours, and appointment data at call time.',
   },
 ];
 

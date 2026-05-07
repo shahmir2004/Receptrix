@@ -5,7 +5,8 @@ Phase D: Replaces static business_config.json with dynamic per-tenant
 config loaded from the businesses + services tables.
 
 Two resolution paths:
-1. Voice calls: incoming phone number (To field) → phone_number_mappings → business_id
+1. Voice calls: Vapi phone/assistant ids → vapi_phone_numbers → business_id
+   or incoming phone number → phone_number_mappings → business_id
 2. Web/API: JWT + X-Business-Id header → business_id (handled by auth.py)
 """
 from typing import Optional
@@ -20,8 +21,7 @@ _CACHE_TTL_SECONDS = 300  # 5 minutes
 
 def resolve_business_from_phone(to_number: str) -> Optional[str]:
     """
-    Resolve a provider phone number (the 'To' field from Twilio/SignalWire
-    webhook) to a business_id.
+    Resolve a provider phone number from an inbound voice webhook to a business_id.
 
     Returns business_id (UUID string) or None if no mapping found.
     """
@@ -32,6 +32,34 @@ def resolve_business_from_phone(to_number: str) -> Optional[str]:
 
     if result.data:
         return result.data[0]["business_id"]
+    return None
+
+
+def resolve_business_from_vapi(
+    phone_number_id: Optional[str] = None,
+    assistant_id: Optional[str] = None,
+    phone_number: Optional[str] = None,
+) -> Optional[str]:
+    """Resolve a Vapi call/tool payload to a tenant business_id."""
+    sb = get_supabase()
+
+    if phone_number_id:
+        result = sb.table("vapi_phone_numbers").select("business_id").eq(
+            "vapi_phone_number_id", phone_number_id
+        ).eq("status", "active").limit(1).execute()
+        if result.data:
+            return result.data[0]["business_id"]
+
+    if assistant_id:
+        result = sb.table("vapi_phone_numbers").select("business_id").eq(
+            "vapi_assistant_id", assistant_id
+        ).in_("status", ["active", "provisioning"]).limit(1).execute()
+        if result.data:
+            return result.data[0]["business_id"]
+
+    if phone_number:
+        return resolve_business_from_phone(phone_number)
+
     return None
 
 

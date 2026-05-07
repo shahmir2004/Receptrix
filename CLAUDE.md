@@ -1,67 +1,87 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
 
-## What is Receptrix
+## What Receptrix Is
 
-Receptrix is an AI-powered voice receptionist system that handles phone calls (via Twilio or SignalWire), manages appointments, and provides a web chat interface. Built with Python/FastAPI, SQLite, and a vanilla JS frontend.
+Receptrix is a multi-tenant AI voice receptionist SaaS for US medical clinics. Each clinic signs up, selects a healthcare business type, activates the $300/month Lemon Squeezy plan, provisions a Vapi-owned US phone number, configures its AI receptionist, and books appointments into Supabase-scoped clinic data.
 
 ## Development Commands
 
 ```bash
-# Install dependencies (use a venv)
 pip install -r requirements.txt
-
-# Run the server
 python main.py
-# Or directly with uvicorn:
 uvicorn main:app --host 0.0.0.0 --port 8000
 
-# Production (Render/Heroku)
-uvicorn main:app --host 0.0.0.0 --port $PORT
+cd frontend
+npm install
+npm run dev
+npm run build
 ```
-
-No test suite exists. No linter configuration exists.
 
 ## Architecture
 
-**Request flow for voice calls:**
-Phone call → Twilio/SignalWire webhook → `main.py` (`/voice/incoming`, `/voice/respond`) → `twilio_service.py` or `signalwire_service.py` (selected by `VOICE_PROVIDER` env var) → `voice_handler.py` (AI conversation logic) → TwiML response back to caller
+Primary stack: FastAPI, Supabase Postgres, React/Vite, Lemon Squeezy billing, and Vapi voice.
 
-**Request flow for web chat:**
-Browser → `main.py` (`/chat`) → `receptionist.py` (intent detection + response generation)
+Vapi call flow:
 
-### Key modules
+```text
+PSTN call -> Vapi phone number
+  -> Vapi assistant configured by /business/voice/provision
+  -> POST /webhooks/vapi
+  -> tool-calls resolved by Vapi phone number or assistant id
+  -> vapi_agent.py reads clinic settings/services/hours live
+  -> database.py writes callers, appointments, call logs, and audit events by business_id
+```
 
-- **main.py** — FastAPI app with all API endpoints. Serves static frontend files directly (no build step). Initializes DB and config at startup.
-- **voice_handler.py** — Multi-provider AI handler for phone conversations. Supports Groq, HuggingFace, Ollama, and OpenAI via an `AIProvider` abstract base class. Manages conversation state, appointment booking during calls.
-- **twilio_service.py / signalwire_service.py** — Voice provider integrations. Both produce TwiML responses. SignalWire reuses Twilio's TwiML library without the SignalWire SDK.
-- **receptionist.py** — `ReceptionistAI` class for the web chat interface. Uses keyword-based intent detection (greeting, service inquiry, pricing, booking, etc.).
-- **database.py** — All SQLite operations. Direct `sqlite3` usage (no ORM). Tables: `bookings` (legacy), `callers`, `call_logs`, `appointments`, `conversation_states`. DB file: `receptionist.db`.
-- **models.py** — Pydantic models for all data types (appointments, callers, call logs, conversation state, business config).
-- **config.py** — Loads `business_config.json` and env vars. Cached singleton pattern for `BusinessConfig`.
+Key modules:
 
-### Frontend
+- `main.py` - FastAPI app, auth, billing, Vapi provisioning, Vapi webhook, dashboard APIs.
+- `billing.py` - Lemon Squeezy checkout, webhook signature verification, subscription state.
+- `vapi_client.py` - Vapi REST client wrapper.
+- `vapi_agent.py` - Vapi assistant payloads and tool-call handlers.
+- `tenant.py` - Business config cache and Vapi/phone tenant resolution.
+- `database.py` - Supabase operations for callers, calls, appointments, availability, and audit events.
+- `auth.py` - Supabase auth, secure cookies, CSRF, business membership checks.
+- `frontend/` - React/Vite dashboard and landing page.
 
-Single-page app: `index.html`, `style.css`, `script.js`. Served as static files by FastAPI (no bundler). The dashboard shows appointments, call logs, and chat interface.
+## Production Rules
+
+- Vapi is the only voice, AI call, and phone-number provider.
+- Do not reintroduce alternate telephony providers.
+- Medical clinic assistants must use `compliancePlan.hipaaEnabled=true`.
+- Do not store Vapi recordings, transcripts, or PHI-bearing call artifacts.
+- Do not send PHI to Lemon Squeezy.
+- Use `business_id` for every tenant-scoped query and write.
+- Voice provisioning and test-call endpoints require owner/admin access.
+- Webhooks must verify `LEMONSQUEEZY_WEBHOOK_SECRET` or `VAPI_WEBHOOK_SECRET`.
+- Production deploys need exact `ALLOWED_ORIGINS`, `ALLOWED_HOSTS`, `COOKIE_SECURE=true`, and BAAs with Vapi, Supabase, and the hosting provider before real PHI.
 
 ## Configuration
 
-- **business_config.json** — Business name, working hours, services (name/price/duration), contact info, timezone.
-- **.env** — AI provider selection (`AI_PROVIDER`), API keys (Groq/OpenAI/HuggingFace), Twilio/SignalWire credentials, `SERVER_URL`, `VOICE_PROVIDER` (twilio or signalwire). See `.env.example` for all variables.
+Required backend env vars:
 
-## Deployment
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_ANON_KEY`
+- `VAPI_API_KEY`
+- `VAPI_WEBHOOK_SECRET`
+- `LEMONSQUEEZY_API_KEY`
+- `LEMONSQUEEZY_STORE_ID`
+- `LEMONSQUEEZY_MEDICAL_VARIANT_ID`
+- `LEMONSQUEEZY_WEBHOOK_SECRET`
+- `SERVER_URL`
 
-Configured for Render (`render.yaml`) and Heroku (`Procfile`). Python 3.11+.
+Development-only:
+
+- `BYPASS_BILLING_FOR_DEMO=true` allows Vapi provisioning before a Lemon Squeezy webhook marks the subscription active. Keep it false in production.
 
 ## Codebase Search
 
-A code knowledge graph is available via the `code-review-graph` MCP. Prefer using it over manual file searches:
+A graphify knowledge graph exists at `graphify-out/`.
 
-- **Semantic search** — use `semantic_search_nodes_tool` to find functions/classes by concept
-- **Call chains** — use `query_graph` with `callers_of` / `callees_of` to trace execution flows
-- **Architecture** — use `get_architecture_overview_tool` to understand module boundaries
-- **Impact analysis** — use `get_impact_radius` before modifying a file
-- **Change review** — use `detect_changes_tool` to see what a diff affects
+Rules:
 
-The graph covers 317 nodes (15 files, Python + JS) with semantic embeddings active. Visualize at `.code-review-graph/graph.html` or run `python -m code_review_graph visualize --serve`.
+- Before architecture or codebase answers, read `graphify-out/GRAPH_REPORT.md`.
+- If `graphify-out/wiki/index.md` exists, use the wiki before raw files.
+- After modifying code files, run `graphify update .` when the graphify CLI is available.

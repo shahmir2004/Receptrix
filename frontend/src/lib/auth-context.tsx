@@ -13,6 +13,9 @@ interface BusinessMembership {
   business_id: string;
   business_name: string;
   role: string;
+  business_type?: string;
+  hipaa_mode?: boolean;
+  billing_status?: string;
 }
 
 interface AuthContextValue {
@@ -23,7 +26,7 @@ interface AuthContextValue {
   isLoading: boolean;
   isLoggingOut: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  signup: (name: string, businessName: string, email: string, password: string) => Promise<{ success: boolean; needsVerification?: boolean }>;
+  signup: (name: string, businessName: string, businessType: string, email: string, password: string) => Promise<{ success: boolean; needsVerification?: boolean }>;
   logout: () => Promise<void>;
   setBusinessContext: (businessId: string | null) => void;
   hasActiveBusinessContext: () => boolean;
@@ -150,12 +153,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (
       name: string,
       businessName: string,
+      businessType: string,
       email: string,
       password: string
     ): Promise<{ success: boolean; needsVerification?: boolean }> => {
       const { response, data } = await publicRequest<Record<string, unknown>>('/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ email, password, full_name: name, business_name: businessName }),
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: name,
+          business_name: businessName,
+          business_type: businessType,
+        }),
       });
       if (response.ok && data.success) {
         if (data.needs_email_verification) {

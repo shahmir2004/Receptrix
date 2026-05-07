@@ -12,14 +12,54 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
-      - key: TWILIO_ACCOUNT_SID
+      - key: REQUIRE_PROD_READY
+        value: "true"
+      - key: SERVER_URL
         sync: false
-      - key: TWILIO_AUTH_TOKEN
+      - key: SUPABASE_URL
         sync: false
-      - key: TWILIO_PHONE_NUMBER
+      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: VAPI_API_KEY
+        sync: false
+      - key: VAPI_BASE_URL
+        value: https://api.vapi.ai
+      - key: VAPI_WEBHOOK_SECRET
+        sync: false
+      - key: VAPI_MODEL_PROVIDER
+        value: openai
+      - key: VAPI_MODEL
+        value: gpt-4o-mini
+      - key: VAPI_MAX_CALL_SECONDS
+        value: "600"
+      - key: BYPASS_BILLING_FOR_DEMO
+        sync: false
+      - key: LEMONSQUEEZY_API_KEY
+        sync: false
+      - key: LEMONSQUEEZY_STORE_ID
+        sync: false
+      - key: LEMONSQUEEZY_MEDICAL_VARIANT_ID
+        sync: false
+      - key: LEMONSQUEEZY_WEBHOOK_SECRET
+        sync: false
+      - key: LEMONSQUEEZY_TEST_MODE
+        sync: false
+      - key: LEMONSQUEEZY_SUCCESS_URL
+        sync: false
+      - key: LEMONSQUEEZY_CANCEL_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: lax
       - key: BUSINESS_NAME
         sync: false
-      - key: BUSINESS_TIMEZONE
+      - key: DEFAULT_BUSINESS_TIMEZONE
         sync: false
-    healthCheckPath: /
+    healthCheckPath: /health

@@ -23,6 +23,8 @@ export default defineConfig({
       '/health': 'http://localhost:8000',
       '/book': 'http://localhost:8000',
       '/config': 'http://localhost:8000',
+      '/pricing': 'http://localhost:8000',
+      '/billing': 'http://localhost:8000',
     },
   },
 })

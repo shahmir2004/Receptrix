@@ -1,13 +1,13 @@
 -- 013_create_phone_number_mappings.sql
--- Phase D: Maps provider phone numbers (Twilio/SignalWire) to businesses.
+-- Phase D: Maps Vapi phone numbers to businesses.
 -- When a call arrives on a provider number, we look up which business owns it.
 
 CREATE TABLE IF NOT EXISTS phone_number_mappings (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     business_id UUID        NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-    phone_number TEXT       NOT NULL UNIQUE,  -- the Twilio/SignalWire number in E.164
-    provider    TEXT        NOT NULL DEFAULT 'signalwire'
-                            CHECK (provider IN ('twilio', 'signalwire')),
+    phone_number TEXT       NOT NULL UNIQUE,  -- Vapi-owned number in E.164
+    provider    TEXT        NOT NULL DEFAULT 'vapi'
+                            CHECK (provider IN ('vapi')),
     label       TEXT,                         -- optional friendly name
     is_active   BOOLEAN     NOT NULL DEFAULT TRUE,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -34,11 +34,11 @@ CREATE POLICY "Owner/admin can manage phone numbers"
     USING (auth_is_owner_or_admin(business_id))
     WITH CHECK (auth_is_owner_or_admin(business_id));
 
--- Seed: map the demo business's SignalWire number
+-- Seed: map the demo business's placeholder Vapi number
 INSERT INTO phone_number_mappings (business_id, phone_number, provider, label)
 VALUES (
     '00000000-0000-0000-0000-000000000001',
-    '+placeholder_signalwire',
-    'signalwire',
+    '+placeholder_vapi',
+    'vapi',
     'Main reception line'
 ) ON CONFLICT (phone_number) DO NOTHING;

@@ -43,14 +43,14 @@ export function AppointmentsTable() {
   const [modalOpen, setModalOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
-  const loadAppointments = useCallback(async () => {
+  const loadAppointments = useCallback(async (silent = false) => {
     if (!hasActiveBusinessContext()) {
       setAppointments([]);
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const params = new URLSearchParams();
       if (filters.date) params.set('date', filters.date);
@@ -63,12 +63,16 @@ export function AppointmentsTable() {
       console.error('Error loading appointments:', err);
       toast.show('Failed to load appointments', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [hasActiveBusinessContext, filters.date, toast]);
 
   useEffect(() => {
     loadAppointments();
+    const interval = window.setInterval(() => {
+      loadAppointments(true);
+    }, 15000);
+    return () => window.clearInterval(interval);
   }, [loadAppointments]);
 
   async function updateStatus(id: number, status: 'confirmed' | 'cancelled') {

@@ -1,20 +1,22 @@
 """
 FastAPI main application for the AI Voice Receptionist system.
-Handles both web chat and Twilio/SignalWire voice calls.
+Handles web chat, Vapi voice webhooks, billing, and clinic dashboard APIs.
 
-Phase E: Business settings CRUD, tenant-scoped frontend, cache invalidation.
-Voice endpoints remain unauthenticated (webhook callbacks from provider).
+Voice endpoints remain JWT-free webhook callbacks, but they require the
+configured Vapi webhook secret.
 """
-from fastapi import FastAPI, HTTPException, Form, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, Response, JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from typing import List, Optional, Tuple
 import os
 import secrets
+import httpx
 from pathlib import Path
 from datetime import datetime
 from pydantic import BaseModel
@@ -36,11 +38,9 @@ from database import (
     get_all_appointments, get_appointments_for_date, create_appointment,
     get_call_logs, get_available_slots, check_time_slot_available,
     get_caller_appointments, get_or_create_caller, update_appointment_status,
-    AppointmentStatus
+    create_call_log, update_call_log, AppointmentStatus, CallStatus
 )
-from config import load_config, get_config, get_server_config, get_voice_provider
-from twilio_service import get_twilio_service
-from signalwire_service import get_signalwire_service
+from config import load_config, get_config, get_server_config
 from auth import (
     require_auth, require_business_access, require_business_admin,
     sign_up, sign_in, create_business_for_user, add_business_member,
@@ -49,17 +49,24 @@ from auth import (
 )
 from tenant import get_business_config
 from logging_config import configure_logging, get_logger
+from billing import (
+    create_checkout,
+    get_subscription,
+    is_subscription_active,
+    pricing_plans,
+    record_lemonsqueezy_webhook,
+    verify_lemonsqueezy_signature,
+)
+from models import BusinessType
+from vapi_agent import (
+    build_assistant_payload,
+    handle_tool_calls,
+    provider_call_id,
+    vapi_tool_payloads,
+)
+from vapi_client import VapiClient, VapiConfigError
 
 logger = get_logger(__name__)
-
-
-def get_voice_service():
-    """Get the appropriate voice service based on configuration."""
-    provider = get_voice_provider()
-    if provider == "signalwire":
-        return get_signalwire_service()
-    else:
-        return get_twilio_service()
 
 
 # ── Rate limiter ────────────────────────────────────────────────────────────
@@ -94,6 +101,22 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Business-Id", "X-CSRF-Token"],
 )
 
+_allowed_hosts = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()]
+if _allowed_hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
+    if _cookie_secure():
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
 
 # Configure structured logging before anything else
 configure_logging()
@@ -118,6 +141,7 @@ class SignUpRequest(BaseModel):
     password: str
     full_name: str = ""
     business_name: str
+    business_type: BusinessType = BusinessType.MEDICAL_CLINIC
 
 class SignInRequest(BaseModel):
     email: str
@@ -141,9 +165,10 @@ class CreateBusinessRequest(BaseModel):
     phone: str = ""
     email: str = ""
     address: str = ""
-    timezone: str = "Asia/Karachi"
+    timezone: str = "America/New_York"
     greeting_message: str = ""
     working_hours: Optional[dict] = None
+    business_type: BusinessType = BusinessType.MEDICAL_CLINIC
 
 class UpdateBusinessRequest(BaseModel):
     business_name: Optional[str] = None
@@ -153,6 +178,7 @@ class UpdateBusinessRequest(BaseModel):
     timezone: Optional[str] = None
     greeting_message: Optional[str] = None
     working_hours: Optional[dict] = None
+    business_type: Optional[BusinessType] = None
 
 class CreateServiceRequest(BaseModel):
     name: str
@@ -170,6 +196,27 @@ class UpdateServiceRequest(BaseModel):
 class AddMemberRequest(BaseModel):
     email: str
     role: str = "staff"
+
+
+class BillingCheckoutRequest(BaseModel):
+    email: str = ""
+
+
+class VoiceProvisionRequest(BaseModel):
+    area_code: str
+
+
+class AiReceptionistSettingsRequest(BaseModel):
+    greeting: str = ""
+    tone: str = "warm, calm, and professional"
+    appointment_duration_minutes: int = 30
+    appointment_buffer_minutes: int = 0
+    transfer_phone: str = ""
+    emergency_escalation_text: str = "If this is a medical emergency, please hang up and call 911."
+
+
+class TestCallRequest(BaseModel):
+    customer_phone: str
 
 
 _SESSION_COOKIES = session_cookie_names()
@@ -265,12 +312,16 @@ async def auth_signup(request: Request, response: Response, req: SignUpRequest):
             user_id=result["user_id"],
             business_name=req.business_name,
             email=req.email,
+            business_type=req.business_type.value,
         )
         result["businesses"] = [
             {
                 "business_id": business["id"],
                 "role": "owner",
                 "business_name": business["name"],
+                "business_type": business.get("business_type"),
+                "hipaa_mode": business.get("hipaa_mode", False),
+                "billing_status": business.get("billing_status", "pending"),
             }
         ]
         result["current_business_id"] = business["id"]
@@ -393,7 +444,8 @@ async def create_business(req: CreateBusinessRequest, user_id: str = Depends(req
             address=req.address,
             timezone=req.timezone,
             greeting_message=req.greeting_message,
-            working_hours=req.working_hours
+            working_hours=req.working_hours,
+            business_type=req.business_type.value,
         )
         return {"success": True, "business": business}
     except Exception as e:
@@ -416,6 +468,59 @@ async def add_member(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# ============ Pricing & Billing Endpoints ============
+
+@app.get("/pricing/plans")
+async def get_pricing_plans():
+    return {"success": True, "plans": pricing_plans()}
+
+
+@app.post("/billing/checkout")
+@limiter.limit("10/minute")
+async def billing_checkout(
+    request: Request,
+    req: BillingCheckoutRequest,
+    access: Tuple[str, str] = Depends(require_business_admin),
+):
+    user_id, business_id = access
+    try:
+        email = req.email
+        if not email:
+            profile = get_user_profile(user_id).get("profile", {})
+            email = profile.get("email", "")
+        checkout = await create_checkout(business_id, email)
+        return {"success": True, **checkout}
+    except httpx.HTTPStatusError as exc:
+        logger.error("Lemon Squeezy checkout failed: %s", exc.response.text)
+        raise HTTPException(status_code=502, detail="Unable to create billing checkout.") from exc
+    except Exception as exc:
+        logger.exception("Billing checkout failed")
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/billing/subscription")
+async def billing_subscription(access: Tuple[str, str] = Depends(require_business_access)):
+    _, business_id = access
+    return {"success": True, "subscription": get_subscription(business_id)}
+
+
+@app.post("/webhooks/lemonsqueezy")
+@limiter.limit("60/minute")
+async def lemonsqueezy_webhook(request: Request):
+    raw_body = await request.body()
+    signature = request.headers.get("x-signature", "")
+    if not verify_lemonsqueezy_signature(raw_body, signature):
+        raise HTTPException(status_code=401, detail="Invalid Lemon Squeezy signature.")
+
+    payload = await request.json()
+    try:
+        result = record_lemonsqueezy_webhook(payload)
+        return {"success": True, **result}
+    except Exception as exc:
+        logger.exception("Unable to process Lemon Squeezy webhook")
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 # ============ Business Settings Endpoints ============
 # All require JWT + business membership. Admin/owner for writes.
 
@@ -432,7 +537,9 @@ async def get_business_settings(
     if not biz.data:
         raise HTTPException(status_code=404, detail="Business not found")
 
-    return biz.data[0]
+    row = biz.data[0]
+    row["business_name"] = row.get("name", "")
+    return {"success": True, "settings": row}
 
 
 @app.patch("/business/settings")
@@ -448,6 +555,8 @@ async def update_business_settings(
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
     if "business_name" in updates:
         updates["name"] = updates.pop("business_name")
+    if "business_type" in updates and hasattr(updates["business_type"], "value"):
+        updates["business_type"] = updates["business_type"].value
 
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -474,7 +583,10 @@ async def list_business_services(
         "business_id", business_id
     ).order("name").execute()
 
-    return {"services": result.data}
+    services = []
+    for service in result.data:
+        services.append({**service, "duration_minutes": service.get("duration")})
+    return {"success": True, "services": services}
 
 
 @app.post("/business/services")
@@ -546,171 +658,324 @@ async def delete_business_service(
     return {"success": True, "message": "Service deactivated"}
 
 
-# ============ Voice/Twilio/SignalWire Endpoints ============
-# These are webhook callbacks — NOT JWT-authenticated.
-# Tenant resolution happens via the To phone number.
+# ============ Vapi AI Receptionist Endpoints ============
 
-@app.post("/voice/incoming")
-async def voice_incoming(
-    CallSid: str = Form(...),
-    From: str = Form(...),
-    To: str = Form(None),
-    CallStatus: str = Form(None)
+def _public_base_url(request: Request) -> str:
+    forwarded_host = request.headers.get("x-forwarded-host", "").strip()
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").strip() or request.url.scheme
+    if forwarded_host:
+        return f"{forwarded_proto}://{forwarded_host}".rstrip("/")
+    server_url = os.getenv("SERVER_URL", "").strip().rstrip("/")
+    if server_url:
+        return server_url
+    return str(request.base_url).rstrip("/")
+
+
+def _vapi_webhook_authorized(request: Request) -> bool:
+    expected = os.getenv("VAPI_WEBHOOK_SECRET", "").strip()
+    if not expected:
+        return False
+    supplied = request.headers.get("x-vapi-secret", "").strip()
+    if supplied and secrets.compare_digest(supplied, expected):
+        return True
+    auth = request.headers.get("authorization", "").strip()
+    if auth.lower().startswith("bearer "):
+        return secrets.compare_digest(auth.split(" ", 1)[1].strip(), expected)
+    return False
+
+
+def _normalize_area_code(value: str) -> str:
+    area_code = "".join(ch for ch in value if ch.isdigit())
+    if len(area_code) != 3:
+        raise HTTPException(status_code=422, detail="US area code must be exactly 3 digits.")
+    return area_code
+
+
+def _default_ai_settings() -> dict:
+    return {
+        "greeting": "Thank you for calling. How may I help you today?",
+        "tone": "warm, calm, and professional",
+        "appointment_duration_minutes": 30,
+        "appointment_buffer_minutes": 0,
+        "transfer_phone": "",
+        "emergency_escalation_text": "If this is a medical emergency, please hang up and call 911.",
+    }
+
+
+def _get_ai_settings(business_id: str) -> dict:
+    from supabase_client import get_supabase
+    sb = get_supabase()
+    result = sb.table("ai_receptionist_settings").select("*").eq(
+        "business_id", business_id
+    ).limit(1).execute()
+    if result.data:
+        return {**_default_ai_settings(), **result.data[0]}
+    defaults = {"business_id": business_id, **_default_ai_settings()}
+    sb.table("ai_receptionist_settings").insert(defaults).execute()
+    return defaults
+
+
+def _billing_allows_voice(business_id: str) -> bool:
+    if os.getenv("BYPASS_BILLING_FOR_DEMO", "false").lower() in {"1", "true", "yes", "on"}:
+        return True
+    subscription = get_subscription(business_id)
+    return is_subscription_active(subscription.get("status"))
+
+
+async def _ensure_vapi_tools(
+    client: VapiClient,
+    server_url: str,
+    existing_tool_ids: Optional[list[str]],
+) -> list[str]:
+    if existing_tool_ids:
+        return existing_tool_ids
+    tool_ids = []
+    payloads = vapi_tool_payloads(server_url)
+    for payload in payloads:
+        tool = await client.create_tool(payload)
+        if tool.get("id"):
+            tool_ids.append(tool["id"])
+    if len(tool_ids) != len(payloads):
+        raise RuntimeError("Unable to create all Vapi tools.")
+    return tool_ids
+
+
+@app.get("/business/ai-settings")
+async def get_ai_settings(access: Tuple[str, str] = Depends(require_business_access)):
+    _, business_id = access
+    return {"success": True, "settings": _get_ai_settings(business_id)}
+
+
+@app.patch("/business/ai-settings")
+async def update_ai_settings(
+    req: AiReceptionistSettingsRequest,
+    request: Request,
+    access: Tuple[str, str] = Depends(require_business_admin),
 ):
-    """
-    Handle incoming voice calls from Twilio or SignalWire.
-    This is the webhook endpoint configured in your voice provider.
-    """
-    try:
-        voice_service = get_voice_service()
-        twiml = voice_service.handle_incoming_call(CallSid, From, to_number=To)
+    _, business_id = access
+    from supabase_client import get_supabase
+    from tenant import invalidate_config_cache
 
-        return Response(content=twiml, media_type="application/xml")
-    except Exception as e:
-        logger.error("Voice incoming error: %s", e, exc_info=True)
-        # Return a basic TwiML response on error
-        error_twiml = """
-        <Response>
-            <Say voice="Polly.Joanna">We're sorry, we're experiencing technical difficulties. Please try again later.</Say>
-            <Hangup/>
-        </Response>
-        """
-        return Response(content=error_twiml, media_type="application/xml")
+    sb = get_supabase()
+    existing = sb.table("ai_receptionist_settings").select("business_id").eq(
+        "business_id", business_id
+    ).limit(1).execute()
+    payload = {"business_id": business_id, **req.model_dump(), "updated_at": datetime.now().isoformat()}
+    if existing.data:
+        sb.table("ai_receptionist_settings").update(payload).eq("business_id", business_id).execute()
+    else:
+        sb.table("ai_receptionist_settings").insert(payload).execute()
+
+    voice = sb.table("vapi_phone_numbers").select("*").eq("business_id", business_id).limit(1).execute()
+    if voice.data and voice.data[0].get("vapi_assistant_id"):
+        try:
+            await VapiClient().update_assistant(
+                voice.data[0]["vapi_assistant_id"],
+                build_assistant_payload(
+                    business_id,
+                    payload,
+                    _public_base_url(request),
+                    voice.data[0].get("vapi_tool_ids") or [],
+                ),
+            )
+        except Exception:
+            logger.warning("Unable to update Vapi assistant after settings change", exc_info=True)
+
+    invalidate_config_cache(business_id)
+    return {"success": True, "settings": payload}
 
 
-@app.post("/voice/respond")
-async def voice_respond(
-    CallSid: str = Form(...),
-    From: str = Form(...),
-    To: str = Form(None),
-    SpeechResult: str = Form(None),
-    Confidence: float = Form(None)
+@app.get("/business/voice")
+async def get_business_voice(access: Tuple[str, str] = Depends(require_business_access)):
+    _, business_id = access
+    from supabase_client import get_supabase
+
+    voice = get_supabase().table("vapi_phone_numbers").select("*").eq(
+        "business_id", business_id
+    ).limit(1).execute()
+    return {
+        "success": True,
+        "voice": voice.data[0] if voice.data else None,
+        "subscription": get_subscription(business_id),
+        "settings": _get_ai_settings(business_id),
+    }
+
+
+@app.post("/business/voice/provision")
+@limiter.limit("5/minute")
+async def provision_vapi_voice(
+    request: Request,
+    req: VoiceProvisionRequest,
+    access: Tuple[str, str] = Depends(require_business_admin),
 ):
-    """
-    Handle speech input from ongoing call.
-    Called by Twilio/SignalWire when caller speaks.
-    """
+    _, business_id = access
+    if not _billing_allows_voice(business_id):
+        raise HTTPException(status_code=402, detail="Activate billing before provisioning a Vapi number.")
+
+    from supabase_client import get_supabase
+    sb = get_supabase()
+    area_code = _normalize_area_code(req.area_code)
+    server_url = _public_base_url(request)
+    settings = _get_ai_settings(business_id)
+
+    current = sb.table("vapi_phone_numbers").select("*").eq("business_id", business_id).limit(1).execute()
+    row = current.data[0] if current.data else {}
+
     try:
-        logger.info("Voice respond - CallSid: %s, From: %s, Speech: %s", CallSid, From, SpeechResult)
+        client = VapiClient()
+        tool_ids = await _ensure_vapi_tools(client, server_url, row.get("vapi_tool_ids"))
+        assistant_payload = build_assistant_payload(business_id, settings, server_url, tool_ids)
 
-        if not SpeechResult:
-            # No speech detected, handle as no input
-            voice_service = get_voice_service()
-            twiml = voice_service.handle_no_input(CallSid)
-            return Response(content=twiml, media_type="application/xml")
+        if row.get("vapi_assistant_id"):
+            assistant = await client.update_assistant(row["vapi_assistant_id"], assistant_payload)
+        else:
+            assistant = await client.create_assistant(assistant_payload)
+        assistant_id = assistant.get("id") or row.get("vapi_assistant_id")
+        if not assistant_id:
+            raise RuntimeError("Vapi did not return an assistant id.")
 
-        voice_service = get_voice_service()
-        twiml = voice_service.handle_speech_input(CallSid, From, SpeechResult, to_number=To)
+        if row.get("vapi_phone_number_id"):
+            phone = row
+            await client.update_phone_number(row["vapi_phone_number_id"], {
+                "assistantId": assistant_id,
+                "server": assistant_payload["server"],
+            })
+        else:
+            phone = await client.create_phone_number({
+                "provider": "vapi",
+                "numberDesiredAreaCode": area_code,
+                "assistantId": assistant_id,
+                "name": f"Receptrix clinic line {business_id[:8]}",
+                "server": assistant_payload["server"],
+            })
 
-        return Response(content=twiml, media_type="application/xml")
-    except Exception as e:
-        logger.error("Voice respond error: %s", e, exc_info=True)
-        error_twiml = """
-        <Response>
-            <Say voice="Polly.Joanna">I'm sorry, could you please repeat that?</Say>
-            <Gather input="speech" action="/voice/respond" method="POST" language="en-US" speechTimeout="auto"/>
-        </Response>
-        """
-        return Response(content=error_twiml, media_type="application/xml")
+        phone_number = phone.get("number") or row.get("phone_number")
+        phone_id = phone.get("id") or row.get("vapi_phone_number_id")
+        upsert_row = {
+            "business_id": business_id,
+            "vapi_assistant_id": assistant_id,
+            "vapi_phone_number_id": phone_id,
+            "phone_number": phone_number,
+            "area_code": area_code,
+            "status": "active",
+            "vapi_tool_ids": tool_ids,
+            "hipaa_enabled": True,
+            "updated_at": datetime.now().isoformat(),
+        }
+        if current.data:
+            sb.table("vapi_phone_numbers").update(upsert_row).eq("business_id", business_id).execute()
+        else:
+            sb.table("vapi_phone_numbers").insert(upsert_row).execute()
+
+        if phone_number:
+            sb.table("phone_number_mappings").upsert({
+                "business_id": business_id,
+                "phone_number": phone_number,
+                "provider": "vapi",
+                "label": "Vapi clinic reception line",
+                "is_active": True,
+            }, on_conflict="phone_number").execute()
+
+        return {"success": True, "voice": upsert_row}
+    except VapiConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        logger.error("Vapi provisioning failed: %s", exc.response.text)
+        raise HTTPException(status_code=502, detail="Vapi provisioning failed.") from exc
+    except Exception as exc:
+        logger.exception("Vapi provisioning failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.post("/voice/no-input")
-async def voice_no_input(
-    CallSid: str = Form(...),
-    From: str = Form(...)
+@app.post("/business/voice/test-call")
+@limiter.limit("5/minute")
+async def start_vapi_test_call(
+    request: Request,
+    req: TestCallRequest,
+    access: Tuple[str, str] = Depends(require_business_admin),
 ):
-    """Handle when caller doesn't respond."""
+    _, business_id = access
+    if not _billing_allows_voice(business_id):
+        raise HTTPException(status_code=402, detail="Activate billing before running test calls.")
+
+    from supabase_client import get_supabase
+    sb = get_supabase()
+    voice = sb.table("vapi_phone_numbers").select("*").eq("business_id", business_id).limit(1).execute()
+    if not voice.data:
+        raise HTTPException(status_code=400, detail="Provision a Vapi number first.")
+    row = voice.data[0]
+
     try:
-        voice_service = get_voice_service()
-        twiml = voice_service.handle_no_input(CallSid, From)
-        return Response(content=twiml, media_type="application/xml")
-    except Exception as e:
-        logger.error("No input error: %s", e)
-        twiml = """
-        <Response>
-            <Say voice="Polly.Joanna">Goodbye!</Say>
-            <Hangup/>
-        </Response>
-        """
-        return Response(content=twiml, media_type="application/xml")
-
-
-@app.post("/voice/status")
-async def voice_status(
-    CallSid: str = Form(...),
-    CallStatus: str = Form(...)
-):
-    """Handle call status updates."""
-    try:
-        voice_service = get_voice_service()
-        voice_service.handle_call_status(CallSid, CallStatus)
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error("Status webhook error: %s", e)
-        return {"status": "error", "message": str(e)}
-
-
-@app.get("/debug/ai")
-async def debug_ai():
-    """Debug endpoint to test AI provider connectivity."""
-    try:
-        from voice_handler import get_voice_handler
-        handler = get_voice_handler()
-
-        # Test basic AI call
-        test_response = handler.provider.chat(
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "Say hello in one word."}
-            ],
-            temperature=0.5,
-            max_tokens=10
-        )
-
-        return JSONResponse({
-            "status": "ok",
-            "provider": type(handler.provider).__name__,
-            "test_response": test_response,
-            "groq_key_set": bool(os.getenv("GROQ_API_KEY")),
-            "ai_provider_env": os.getenv("AI_PROVIDER", "not set")
+        call = await VapiClient().create_call({
+            "assistantId": row["vapi_assistant_id"],
+            "phoneNumberId": row["vapi_phone_number_id"],
+            "customer": {"number": req.customer_phone},
+            "assistantOverrides": {
+                "firstMessage": "This is a Receptrix demo call. I can help schedule a test appointment using fake patient data."
+            },
+            "metadata": {"receptrix_business_id": business_id, "demo_call": "true"},
         })
-    except Exception as e:
-        import traceback
-        return JSONResponse({
-            "status": "error",
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-            "groq_key_set": bool(os.getenv("GROQ_API_KEY")),
-            "ai_provider_env": os.getenv("AI_PROVIDER", "not set")
-        }, status_code=500)
+        return {"success": True, "call": call}
+    except httpx.HTTPStatusError as exc:
+        logger.error("Vapi test call failed: %s", exc.response.text)
+        raise HTTPException(status_code=502, detail="Unable to start Vapi test call.") from exc
+    except Exception as exc:
+        logger.exception("Vapi test call failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.get("/debug/voice")
-async def debug_voice():
-    """Debug the full voice handler flow."""
+@app.post("/webhooks/vapi")
+@limiter.limit("120/minute")
+async def vapi_webhook(request: Request):
+    if not _vapi_webhook_authorized(request):
+        raise HTTPException(status_code=401, detail="Invalid Vapi webhook secret.")
+
+    payload = await request.json()
+    message = payload.get("message", payload)
+    message_type = message.get("type") if isinstance(message, dict) else None
+
+    if message_type == "tool-calls":
+        return JSONResponse(handle_tool_calls(payload))
+
+    if isinstance(message, dict):
+        _record_vapi_call_event(message)
+    return {"success": True}
+
+
+def _record_vapi_call_event(message: dict[str, object]) -> None:
     try:
-        from voice_handler import get_voice_handler
-        handler = get_voice_handler()
+        from vapi_agent import resolve_business_from_vapi_message
 
-        # Test the full generate_response
-        response = handler.generate_response(
-            caller_input="Hello, what services do you offer?",
-            call_sid="DEBUG_TEST_123",
-            caller_phone="+1234567890"
-        )
+        business_id = resolve_business_from_vapi_message(message)
+        call_id = provider_call_id(message)
+        if not business_id or not call_id:
+            return
 
-        return JSONResponse({
-            "status": "ok",
-            "response_text": response.text,
-            "should_end_call": response.should_end_call
-        })
-    except Exception as e:
-        import traceback
-        return JSONResponse({
-            "status": "error",
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }, status_code=500)
+        call = message.get("call", {}) if isinstance(message.get("call"), dict) else {}
+        customer = call.get("customer", {}) if isinstance(call.get("customer"), dict) else {}
+        caller_phone = customer.get("number") or call.get("customerNumber") or "unknown"
+        status = str(message.get("status") or call.get("status") or "").lower()
+
+        if message.get("type") == "status-update" and status in {"queued", "ringing", "in-progress", "in_progress"}:
+            try:
+                create_call_log(call_sid=call_id, caller_phone=caller_phone, business_id=business_id)
+            except Exception:
+                pass
+            return
+
+        if message.get("type") == "end-of-call-report" or status in {"ended", "completed", "failed"}:
+            ended_reason = str(message.get("endedReason") or call.get("endedReason") or "")
+            duration = message.get("durationSeconds") or call.get("durationSeconds")
+            update_call_log(
+                call_id,
+                call_status=CallStatus.FAILED if "fail" in ended_reason.lower() else CallStatus.COMPLETED,
+                ended_at=datetime.now(),
+                duration_seconds=int(duration) if duration else None,
+                transcript=None,
+                summary=None,
+            )
+    except Exception:
+        logger.warning("Unable to record Vapi call event", exc_info=True)
 
 
 # ============ Chat Endpoints ============
@@ -991,11 +1256,14 @@ async def get_business_config_endpoint(access: Tuple[str, str] = Depends(require
 @app.get("/health")
 async def health_check():
     """
-    Enhanced health check: verifies DB connectivity and AI provider env.
-    Returns HTTP 503 if any critical dependency is unavailable.
+    Health check for Render and operators.
+
+    Local development stays permissive. When REQUIRE_PROD_READY=true, this
+    endpoint fails fast on missing deployment, billing, voice, and security env.
     """
     checks: dict = {}
     overall_ok = True
+    require_prod_ready = os.getenv("REQUIRE_PROD_READY", "false").strip().lower() in {"1", "true", "yes", "on"}
 
     # ── Supabase connectivity ───────────────────────────────────────────────
     try:
@@ -1024,12 +1292,49 @@ async def health_check():
         checks["ai_provider"] = ai_provider
 
     # ── Voice provider env ──────────────────────────────────────────────────
-    voice_provider = os.getenv("VOICE_PROVIDER", "signalwire").lower()
-    if voice_provider == "twilio":
-        voice_ok = bool(os.getenv("TWILIO_ACCOUNT_SID") and os.getenv("TWILIO_AUTH_TOKEN"))
+    voice_ok = bool(os.getenv("VAPI_API_KEY") and os.getenv("VAPI_WEBHOOK_SECRET"))
+    checks["voice_provider"] = "vapi" if voice_ok else "vapi (credentials missing)"
+    if require_prod_ready and not voice_ok:
+        overall_ok = False
+
+    billing_bypass = os.getenv("BYPASS_BILLING_FOR_DEMO", "false").strip().lower() in {"1", "true", "yes", "on"}
+    missing_billing = [
+        key for key in (
+            "LEMONSQUEEZY_API_KEY",
+            "LEMONSQUEEZY_STORE_ID",
+            "LEMONSQUEEZY_MEDICAL_VARIANT_ID",
+            "LEMONSQUEEZY_WEBHOOK_SECRET",
+        )
+        if not os.getenv(key)
+    ]
+    if missing_billing:
+        checks["billing"] = f"missing {', '.join(missing_billing)}"
+        if require_prod_ready:
+            overall_ok = False
+    elif billing_bypass:
+        checks["billing"] = "demo billing bypass enabled"
+        if require_prod_ready:
+            overall_ok = False
     else:
-        voice_ok = bool(os.getenv("SIGNALWIRE_PROJECT_ID") and os.getenv("SIGNALWIRE_API_TOKEN"))
-    checks["voice_provider"] = voice_provider if voice_ok else f"{voice_provider} (credentials missing)"
+        lemon_test = os.getenv("LEMONSQUEEZY_TEST_MODE", "true").strip().lower() in {"1", "true", "yes", "on"}
+        checks["billing"] = f"lemonsqueezy ({'test' if lemon_test else 'live'})"
+
+    if require_prod_ready:
+        server_url = os.getenv("SERVER_URL", "").strip()
+        allowed_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
+        allowed_hosts = os.getenv("ALLOWED_HOSTS", "").strip()
+        security_errors = []
+        if not server_url.startswith("https://"):
+            security_errors.append("SERVER_URL must be an https URL")
+        if not allowed_origins or "*" in {part.strip() for part in allowed_origins.split(",")}:
+            security_errors.append("ALLOWED_ORIGINS must be exact")
+        if not allowed_hosts:
+            security_errors.append("ALLOWED_HOSTS is required")
+        if not _cookie_secure():
+            security_errors.append("COOKIE_SECURE must be true")
+        checks["production_config"] = "ok" if not security_errors else "; ".join(security_errors)
+        if security_errors:
+            overall_ok = False
 
     status = "healthy" if overall_ok else "degraded"
     response_body = {

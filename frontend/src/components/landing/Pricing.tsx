@@ -4,51 +4,30 @@ import PricingCard from './PricingCard';
 
 const tiers = [
   {
-    name: 'Free Trial',
-    price: '3 Days',
-    description: 'Try every Pro feature — no credit card required',
-    features: [
-      'AI calling',
-      'Dashboard',
-      'Analytics',
-      '500 calls/month',
-      '3 phone numbers',
-      'Advanced booking + calendar sync',
-      'CRM integrations (HubSpot, Salesforce)',
-      'Custom voice & script',
-      'Priority support',
-    ],
-    ctaLabel: 'Start Free Trial',
-    ctaTo: '/signup',
-  },
-  {
-    name: 'Pro',
-    price: '$199.99',
+    name: 'Medical Clinic',
+    price: '$300',
     period: 'month',
-    description: 'For growing businesses that need more',
+    description: 'For US clinics launching an AI receptionist with live appointment scheduling',
     popular: true,
     features: [
-      'AI calling',
-      'Dashboard',
-      'Analytics',
-      '500 calls/month',
-      '3 phone numbers',
-      'Advanced booking + calendar sync',
-      'CRM integrations (HubSpot, Salesforce)',
-      'Custom voice & script',
-      'Priority support',
+      '1 Vapi-owned US phone number',
+      'AI receptionist configured for medical clinics',
+      'Live appointment booking into Receptrix',
+      'Clinic services, hours, and greeting controls',
+      'Dashboard test-call workflow',
+      'HIPAA-ready no-recording call handling',
+      '500 Vapi voice minutes included',
+      'Priority onboarding support',
     ],
-    ctaLabel: 'Get Pro',
+    ctaLabel: 'Start Clinic Setup',
     ctaTo: '/signup',
   },
 ];
-
 
 export default function Pricing() {
   return (
     <section id="pricing" className="py-28 px-6">
       <div className="mx-auto max-w-6xl">
-        {/* Header */}
         <motion.div
           variants={fadeUp}
           initial="initial"
@@ -60,19 +39,17 @@ export default function Pricing() {
             Pricing
           </p>
           <h2 className="font-display text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-4">
-            Simple pricing.{' '}
-            <span className="text-white/30">No surprises.</span>
+            Clinic-ready pricing. <span className="text-white/30">Built for live calls.</span>
           </h2>
-          <p className="text-white/40 text-lg">Start free, scale when ready.</p>
+          <p className="text-white/40 text-lg">One monthly plan for the medical clinic demo path.</p>
         </motion.div>
 
-        {/* Cards */}
         <motion.div
           variants={stagger}
           initial="initial"
           whileInView="animate"
           viewport={{ once: true, margin: '-50px' }}
-          className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start"
+          className="mx-auto grid max-w-xl grid-cols-1 gap-5 items-start"
         >
           {tiers.map((tier) => (
             <motion.div key={tier.name} variants={fadeUp}>

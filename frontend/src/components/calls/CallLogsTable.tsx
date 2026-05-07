@@ -13,8 +13,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { TranscriptModal } from './TranscriptModal';
 
 interface CallLog {
   id: string;
@@ -23,7 +21,6 @@ interface CallLog {
   duration_seconds?: number;
   call_status: string;
   appointment_created: boolean;
-  transcript?: string | null;
 }
 
 interface CallsResponse {
@@ -35,6 +32,7 @@ const statusStyles: Record<string, string> = {
   completed: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   missed: 'bg-red-500/15 text-red-400 border-red-500/30',
   'in-progress': 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
+  in_progress: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
 };
 
 export function CallLogsTable() {
@@ -42,8 +40,6 @@ export function CallLogsTable() {
   const toast = useToast();
   const [calls, setCalls] = useState<CallLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTranscript, setSelectedTranscript] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     if (!hasActiveBusinessContext()) {
@@ -72,11 +68,6 @@ export function CallLogsTable() {
     return () => { cancelled = true; };
   }, [hasActiveBusinessContext, toast]);
 
-  function openTranscript(transcript: string) {
-    setSelectedTranscript(transcript);
-    setModalOpen(true);
-  }
-
   if (!hasActiveBusinessContext()) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-neutral-400">
@@ -104,8 +95,7 @@ export function CallLogsTable() {
   }
 
   return (
-    <>
-      <div className="rounded-xl border border-white/10 bg-[#111] overflow-hidden">
+    <div className="rounded-xl border border-white/10 bg-[#111] overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -115,7 +105,7 @@ export function CallLogsTable() {
                 <TableHead className="text-neutral-400">Duration</TableHead>
                 <TableHead className="text-neutral-400">Status</TableHead>
                 <TableHead className="text-neutral-400">Appointment</TableHead>
-                <TableHead className="text-neutral-400">Actions</TableHead>
+                <TableHead className="text-neutral-400">Artifacts</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -148,18 +138,7 @@ export function CallLogsTable() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {call.transcript ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300"
-                        onClick={() => openTranscript(call.transcript!)}
-                      >
-                        View Transcript
-                      </Button>
-                    ) : (
-                      <span className="text-neutral-600">-</span>
-                    )}
+                    <span className="text-neutral-500">Disabled in HIPAA mode</span>
                   </TableCell>
                 </TableRow>
               ))}
@@ -167,12 +146,5 @@ export function CallLogsTable() {
           </Table>
         </div>
       </div>
-
-      <TranscriptModal
-        transcript={selectedTranscript}
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-      />
-    </>
   );
 }

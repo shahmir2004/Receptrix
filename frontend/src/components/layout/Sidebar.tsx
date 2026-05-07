@@ -1,8 +1,8 @@
 import {
   LayoutDashboard,
+  Bot,
   Calendar,
   PhoneIncoming,
-  Mic,
   Settings,
   Phone,
   LogOut,
@@ -21,11 +21,11 @@ const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'appointments', label: 'Appointments', icon: Calendar },
   { id: 'calls', label: 'Call Logs', icon: PhoneIncoming },
-  { id: 'chat', label: 'Voice Test', icon: Mic },
+  { id: 'ai', label: 'AI Receptionist', icon: Bot },
   { id: 'settings', label: 'Settings', icon: Settings },
 ] as const;
 
-const restrictedTabs = new Set(['appointments', 'calls', 'chat']);
+const restrictedTabs = new Set(['appointments', 'calls', 'ai']);
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const { currentUser, businessMemberships, currentBusinessId, logout, hasActiveBusinessContext } =

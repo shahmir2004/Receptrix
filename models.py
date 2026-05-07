@@ -38,6 +38,26 @@ class ConversationState(str, Enum):
     FAREWELL = "farewell"
 
 
+class BusinessType(str, Enum):
+    """Supported onboarding business types."""
+    MEDICAL_CLINIC = "medical_clinic"
+    DENTAL_CLINIC = "dental_clinic"
+    URGENT_CARE = "urgent_care"
+    SPECIALIST_PRACTICE = "specialist_practice"
+    MENTAL_HEALTH = "mental_health"
+    OTHER_HEALTHCARE = "other_healthcare"
+
+
+HEALTHCARE_BUSINESS_TYPES = {
+    BusinessType.MEDICAL_CLINIC.value,
+    BusinessType.DENTAL_CLINIC.value,
+    BusinessType.URGENT_CARE.value,
+    BusinessType.SPECIALIST_PRACTICE.value,
+    BusinessType.MENTAL_HEALTH.value,
+    BusinessType.OTHER_HEALTHCARE.value,
+}
+
+
 # ============ Service Models ============
 
 class Service(BaseModel):
@@ -104,7 +124,7 @@ class CallerCreate(BaseModel):
 class CallLog(BaseModel):
     """Call log entry."""
     id: Optional[int] = None
-    call_sid: str  # Twilio Call SID
+    call_sid: str  # Voice provider call id
     caller_id: Optional[int] = None
     caller_phone: str
     call_status: CallStatus
@@ -255,25 +275,3 @@ class AvailabilityResponse(BaseModel):
     """Response with available time slots."""
     date: str
     slots: List[TimeSlot]
-    
-    
-# ============ Twilio Webhook Models ============
-
-class TwilioVoiceWebhook(BaseModel):
-    """Twilio voice webhook data."""
-    CallSid: str
-    From: str
-    To: str
-    CallStatus: str
-    Direction: Optional[str] = None
-    CallerCity: Optional[str] = None
-    CallerCountry: Optional[str] = None
-
-
-class TwilioSpeechResult(BaseModel):
-    """Twilio speech recognition result."""
-    CallSid: str
-    SpeechResult: Optional[str] = None
-    Confidence: Optional[float] = None
-
-

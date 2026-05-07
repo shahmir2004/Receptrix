@@ -57,11 +57,11 @@ export default function DemoPreview() {
             {/* Waveform */}
             <AudioWaveform />
 
-            {/* Transcript */}
+            {/* Sample opening */}
             <div className="px-5 pb-3">
               <div className="bg-white/[0.04] border border-white/[0.05] rounded-2xl rounded-tl-sm px-4 py-3 max-w-[90%]">
                 <p className="text-sm text-white/70 leading-relaxed">
-                  &ldquo;Hi! You&rsquo;ve reached Downtown Dental. I can help you book an
+                  &ldquo;Hi! You&rsquo;ve reached Downtown Clinic. I can help you book an
                   appointment, answer questions, or connect you with our team. How can I help
                   today?&rdquo;
                 </p>

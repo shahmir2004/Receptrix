@@ -37,3 +37,8 @@ Thumbs.db
 frontend/node_modules/
 node_modules/
 
+# Planning docs (local reference only)
+docs/voice-calling-plan.md
+.gstack/
+.claude/
+graphify-out/

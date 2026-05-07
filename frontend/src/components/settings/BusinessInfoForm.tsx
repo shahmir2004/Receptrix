@@ -15,16 +15,16 @@ import { useToast } from '@/lib/toast-context';
 import { authedRequest } from '@/lib/api';
 
 const TIMEZONES = [
-  'Asia/Karachi',
-  'Asia/Kolkata',
-  'Asia/Dubai',
-  'Asia/Shanghai',
-  'Asia/Tokyo',
   'America/New_York',
   'America/Chicago',
   'America/Denver',
   'America/Los_Angeles',
   'America/Toronto',
+  'Asia/Karachi',
+  'Asia/Kolkata',
+  'Asia/Dubai',
+  'Asia/Shanghai',
+  'Asia/Tokyo',
   'America/Sao_Paulo',
   'Europe/London',
   'Europe/Paris',
@@ -56,7 +56,7 @@ export function BusinessInfoForm() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
-  const [timezone, setTimezone] = useState('Asia/Karachi');
+  const [timezone, setTimezone] = useState('America/New_York');
   const [greetingMessage, setGreetingMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -80,7 +80,7 @@ export function BusinessInfoForm() {
         setPhone(s.phone || '');
         setEmail(s.email || currentUser?.email || '');
         setAddress(s.address || '');
-        setTimezone(s.timezone || 'Asia/Karachi');
+        setTimezone(s.timezone || 'America/New_York');
         setGreetingMessage(s.greeting_message || '');
       })
       .catch((err: unknown) => {
@@ -113,7 +113,7 @@ export function BusinessInfoForm() {
         phone: phone.trim(),
         email: email.trim(),
         address: address.trim(),
-        timezone: timezone || 'Asia/Karachi',
+        timezone: timezone || 'America/New_York',
         greeting_message: greetingMessage.trim(),
       };
 
@@ -207,7 +207,7 @@ export function BusinessInfoForm() {
 
           <div className="space-y-2">
             <Label className="text-white/70">Timezone</Label>
-            <Select value={timezone} onValueChange={(value) => setTimezone(value ?? 'Asia/Karachi')}>
+            <Select value={timezone} onValueChange={(value) => setTimezone(value ?? 'America/New_York')}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select timezone" />
               </SelectTrigger>

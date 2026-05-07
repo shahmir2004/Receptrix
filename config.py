@@ -65,15 +65,6 @@ def get_env(key: str, default: str = "") -> str:
     return os.getenv(key, default)
 
 
-def get_twilio_config() -> dict:
-    """Get Twilio configuration from environment."""
-    return {
-        "account_sid": os.getenv("TWILIO_ACCOUNT_SID", ""),
-        "auth_token": os.getenv("TWILIO_AUTH_TOKEN", ""),
-        "phone_number": os.getenv("TWILIO_PHONE_NUMBER", ""),
-        "my_phone": os.getenv("MY_PHONE_NUMBER", "+923095218142")
-    }
-
 
 def get_openai_config() -> dict:
     """Get OpenAI configuration from environment."""
@@ -92,19 +83,15 @@ def get_server_config() -> dict:
     }
 
 
-def get_signalwire_config() -> dict:
-    """Get SignalWire configuration from environment."""
+def get_vapi_config() -> dict:
+    """Get Vapi configuration from environment."""
     return {
-        "project_id": os.getenv("SIGNALWIRE_PROJECT_ID", ""),
-        "api_token": os.getenv("SIGNALWIRE_API_TOKEN", ""),
-        "space_url": os.getenv("SIGNALWIRE_SPACE_URL", ""),
-        "phone_number": os.getenv("SIGNALWIRE_PHONE_NUMBER", ""),
+        "api_key": os.getenv("VAPI_API_KEY", ""),
+        "base_url": os.getenv("VAPI_BASE_URL", "https://api.vapi.ai"),
+        "webhook_secret": os.getenv("VAPI_WEBHOOK_SECRET", ""),
+        "server_credential_id": os.getenv("VAPI_SERVER_CREDENTIAL_ID", ""),
     }
 
-
-def get_voice_provider() -> str:
-    """Get which voice provider to use (twilio or signalwire)."""
-    return os.getenv("VOICE_PROVIDER", "signalwire").lower()
 
 
 def get_supabase_config() -> dict:

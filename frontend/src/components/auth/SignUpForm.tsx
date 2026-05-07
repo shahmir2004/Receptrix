@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 export default function SignUpForm() {
   const [fullName, setFullName] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [businessType, setBusinessType] = useState('medical_clinic');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,7 +38,7 @@ export default function SignUpForm() {
     setLoading(true);
 
     try {
-      const result = await signup(fullName, businessName, email, password);
+      const result = await signup(fullName, businessName, businessType, email, password);
 
       if (result.needsVerification) {
         setVerificationSent(true);
@@ -111,6 +112,25 @@ export default function SignUpForm() {
           autoComplete="organization"
           className={inputClasses}
         />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="signup-business-type" className="text-white/70">
+          Business Type
+        </Label>
+        <select
+          id="signup-business-type"
+          value={businessType}
+          onChange={(e) => setBusinessType(e.target.value)}
+          className={`${inputClasses} px-3`}
+        >
+          <option value="medical_clinic">Medical clinic</option>
+          <option value="dental_clinic">Dental clinic</option>
+          <option value="urgent_care">Urgent care</option>
+          <option value="specialist_practice">Specialist practice</option>
+          <option value="mental_health">Mental health practice</option>
+          <option value="other_healthcare">Other healthcare</option>
+        </select>
       </div>
 
       <div className="flex flex-col gap-2">

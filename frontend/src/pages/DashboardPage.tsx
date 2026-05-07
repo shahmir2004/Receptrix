@@ -1,5 +1,5 @@
 import { useState, useCallback, createContext, useContext } from 'react';
-import { LayoutDashboard, Calendar, PhoneIncoming, Mic, Settings } from 'lucide-react';
+import { Bot, LayoutDashboard, Calendar, PhoneIncoming, Settings } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -9,9 +9,7 @@ import { RecentCalls } from '@/components/dashboard/RecentCalls';
 import { SetupBanner } from '@/components/dashboard/SetupBanner';
 import { AppointmentsTable } from '@/components/appointments/AppointmentsTable';
 import { CallLogsTable } from '@/components/calls/CallLogsTable';
-import { VoiceTestPanel } from '@/components/voice-test/VoiceTestPanel';
-import { ProfileForm, PasswordForm, BusinessInfoForm, WorkingHoursForm, ServicesEditor } from '@/components/settings';
-import { VoiceProviderCard } from '@/components/settings/VoiceProviderCard';
+import { ProfileForm, PasswordForm, BusinessInfoForm, WorkingHoursForm, ServicesEditor, AIReceptionistPanel } from '@/components/settings';
 
 // Context for child tab components to trigger data refresh
 interface DashboardRefreshContextValue {
@@ -26,7 +24,7 @@ export function useDashboardRefresh() {
   return ctx;
 }
 
-const restrictedTabs = new Set(['appointments', 'calls', 'chat']);
+const restrictedTabs = new Set(['appointments', 'calls', 'ai']);
 
 export default function DashboardPage() {
   const { hasActiveBusinessContext } = useAuth();
@@ -108,17 +106,17 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Voice Test Tab */}
-        {activeTab === 'chat' && (
+        {/* AI Receptionist Tab */}
+        {activeTab === 'ai' && (
           <div className="space-y-6">
             <div>
               <div className="flex items-center gap-2.5">
-                <Mic className="h-6 w-6 text-indigo-400" />
-                <h1 className="text-2xl font-bold text-white">Voice Test</h1>
+                <Bot className="h-6 w-6 text-indigo-400" />
+                <h1 className="text-2xl font-bold text-white">AI Receptionist</h1>
               </div>
-              <p className="mt-1 text-sm text-white/50">Test your AI receptionist in real time</p>
+              <p className="mt-1 text-sm text-white/50">Configure Vapi number, clinic behavior, and live test calls</p>
             </div>
-            <VoiceTestPanel />
+            <AIReceptionistPanel />
           </div>
         )}
 
@@ -138,7 +136,6 @@ export default function DashboardPage() {
               <BusinessInfoForm />
               <WorkingHoursForm />
               <ServicesEditor />
-              <VoiceProviderCard />
             </div>
           </div>
         )}

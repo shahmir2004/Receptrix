@@ -199,6 +199,22 @@ def update_call_log(call_sid: str, **kwargs) -> None:
         sb.table("call_logs").update(updates).eq("call_sid", call_sid).execute()
 
 
+def mark_call_appointment_created(
+    call_sid: str,
+    appointment_id: int,
+    business_id: Optional[str] = None,
+) -> None:
+    """Attach an appointment outcome to a provider call log."""
+    sb = get_supabase()
+    query = sb.table("call_logs").update({
+        "appointment_created": True,
+        "appointment_id": appointment_id,
+    }).eq("call_sid", call_sid)
+    if business_id:
+        query = query.eq("business_id", business_id)
+    query.execute()
+
+
 def get_call_logs(
     limit: int = 50,
     business_id: Optional[str] = None
@@ -269,6 +285,29 @@ def create_appointment(
         }).eq("id", caller_id).execute()
 
     return apt_id
+
+
+def create_appointment_audit_event(
+    business_id: str,
+    appointment_id: int,
+    event_type: str,
+    source: str,
+    actor_id: Optional[str] = None,
+    provider_call_id: Optional[str] = None,
+    metadata: Optional[dict] = None,
+) -> None:
+    """Write a tenant-scoped audit event for appointment and AI actions."""
+    sb = get_supabase()
+    sb.table("appointment_audit_events").insert({
+        "business_id": business_id,
+        "appointment_id": appointment_id,
+        "event_type": event_type,
+        "source": source,
+        "actor_id": actor_id,
+        "provider_call_id": provider_call_id,
+        "metadata": metadata or {},
+        "created_at": datetime.now().isoformat(),
+    }).execute()
 
 
 def get_appointments_for_date(

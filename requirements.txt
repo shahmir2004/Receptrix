@@ -9,10 +9,8 @@ openai>=1.3.0
 groq>=0.4.0
 httpx>=0.25.0
 
-# Twilio for Voice Calls (also provides TwiML for SignalWire)
-twilio>=8.10.0
-
-# SignalWire uses TwiML format - no SDK needed, using httpx for API calls
+# Vapi server API SDK and REST client support
+vapi-server-sdk>=1.11.0
 
 # Environment & Config
 python-dotenv>=1.0.0
