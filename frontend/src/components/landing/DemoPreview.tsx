@@ -114,29 +114,53 @@ export default function DemoPreview() {
     });
   }
 
-  async function requestMicrophoneAccess() {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('This browser does not support microphone access for the live demo.');
-    }
-
-    setMessage('Allow microphone access to start the live demo.');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      stream.getTracks().forEach((track) => track.stop());
-    } catch {
-      throw new Error('Microphone permission is required to start the live demo.');
-    }
-  }
-
   async function startWebDemo() {
+    if (!window.isSecureContext) {
+      setStatus('error');
+      setMessage('Live demo requires a secure (HTTPS) connection. Open this page over HTTPS on your phone.');
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStatus('error');
+      setMessage('This browser does not support microphone access. Try Safari or Chrome (not an in-app browser).');
+      return;
+    }
+
+    let micPromise: Promise<MediaStream>;
+    try {
+      micPromise = navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      console.error('Vapi web demo: getUserMedia threw synchronously', err);
+      setStatus('error');
+      setMessage('Unable to request microphone access on this device.');
+      return;
+    }
+
     setStatus('connecting');
-    setMessage('');
+    setMessage('Allow microphone access to start the live demo.');
     setTranscript([]);
 
     let vapi: VapiInstance | null = null;
 
     try {
-      await requestMicrophoneAccess();
+      let micStream: MediaStream;
+      try {
+        micStream = await micPromise;
+      } catch (err) {
+        console.error('Vapi web demo: microphone permission denied', err);
+        const name = err instanceof Error ? err.name : '';
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          throw new Error('Microphone permission was blocked. Enable mic access for this site in your phone browser settings, then reload.');
+        }
+        if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+          throw new Error('No microphone was found on this device.');
+        }
+        if (name === 'NotReadableError' || name === 'TrackStartError') {
+          throw new Error('Another app is using the microphone. Close it and try again.');
+        }
+        throw new Error(`Microphone permission is required to start the live demo${name ? ` (${name})` : ''}.`);
+      }
+      micStream.getTracks().forEach((track) => track.stop());
 
       const { response, data } = await publicRequest<WebCallConfig>('/demo/web-call-config', { method: 'GET' });
       if (!response.ok) {
