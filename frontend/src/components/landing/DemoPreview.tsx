@@ -14,7 +14,12 @@ interface VapiInstance {
   stop(): void;
 }
 
-type VapiConstructor = new (publicKey: string) => VapiInstance;
+type VapiConstructor = new (
+  publicKey: string,
+  apiBaseUrl?: string,
+  dailyCallConfig?: { avoidEval?: boolean; alwaysIncludeMicInPermissionPrompt?: boolean },
+  dailyCallObject?: { audioSource?: boolean; startAudioOff?: boolean }
+) => VapiInstance;
 type VapiModule = {
   default?: VapiConstructor | { default?: VapiConstructor };
   'module.exports'?: { default?: VapiConstructor };
@@ -66,6 +71,13 @@ export default function DemoPreview() {
   }
 
   function attachVapiEvents(vapi: VapiInstance) {
+    vapi.on('call-start-progress', (event: Record<string, unknown>) => {
+      if (event.status !== 'started' || typeof event.stage !== 'string') return;
+      if (event.stage === 'web-call-creation') setMessage('Creating a secure demo room...');
+      if (event.stage === 'daily-call-object-creation') setMessage('Preparing browser audio...');
+      if (event.stage === 'daily-call-join') setMessage('Joining the live voice room...');
+    });
+
     vapi.on('call-start', () => {
       setStatus('live');
       setMessage('Live demo is connected.');
@@ -102,19 +114,37 @@ export default function DemoPreview() {
     });
   }
 
+  async function requestMicrophoneAccess() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('This browser does not support microphone access for the live demo.');
+    }
+
+    setMessage('Allow microphone access to start the live demo.');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      stream.getTracks().forEach((track) => track.stop());
+    } catch {
+      throw new Error('Microphone permission is required to start the live demo.');
+    }
+  }
+
   async function startWebDemo() {
     setStatus('connecting');
     setMessage('');
     setTranscript([]);
 
+    let vapi: VapiInstance | null = null;
+
     try {
+      await requestMicrophoneAccess();
+
       const { response, data } = await publicRequest<WebCallConfig>('/demo/web-call-config', { method: 'GET' });
       if (!response.ok) {
         throw new Error(getErrorMessage(data as unknown as Record<string, unknown>, 'Demo voice is not configured yet.'));
       }
 
       const Vapi = resolveVapiConstructor(await import('@vapi-ai/web') as VapiModule);
-      const vapi = new Vapi(data.public_key);
+      vapi = new Vapi(data.public_key, undefined, { alwaysIncludeMicInPermissionPrompt: true });
       attachVapiEvents(vapi);
       vapiRef.current = vapi;
 
@@ -133,6 +163,7 @@ export default function DemoPreview() {
         },
       });
     } catch (error) {
+      vapi?.stop();
       vapiRef.current?.stop();
       vapiRef.current = null;
       setStatus('error');
