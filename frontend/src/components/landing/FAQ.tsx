@@ -34,7 +34,7 @@ const faqs = [
   },
   {
     q: 'Is there a free trial?',
-    a: 'Yes! The Starter plan is completely free with 50 calls per month. The Pro plan also includes a 30-day free trial so you can test all premium features risk-free.',
+    a: 'Yes. Both the Medical Clinic and General Business plans include a 3-day free trial so you can test live call handling before committing.',
   },
   {
     q: 'What integrations are supported?',

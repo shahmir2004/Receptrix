@@ -32,13 +32,13 @@ export default function CTABanner() {
           Ready to never miss a call again?
         </h2>
         <p className="text-white/40 text-lg mb-10">
-          Start your free trial — no card required
+          Start your 3-day free trial - no card required
         </p>
         <ShimmerButton to="/signup" size="lg">
           Get Started Free
         </ShimmerButton>
         <p className="text-white/20 text-xs mt-6 tracking-wide">
-          30-day free trial &middot; Cancel anytime &middot; No setup fees
+          3-day free trial &middot; Cancel anytime &middot; No setup fees
         </p>
       </motion.div>
     </section>

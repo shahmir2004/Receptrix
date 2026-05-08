@@ -10,6 +10,7 @@ const tiers = [
     description: 'For US clinics launching an AI receptionist with live appointment scheduling',
     popular: true,
     features: [
+      '3-day free trial included',
       '1 Vapi-owned US phone number',
       'AI receptionist configured for medical clinics',
       'Live appointment booking into Receptrix',
@@ -20,6 +21,24 @@ const tiers = [
       'Priority onboarding support',
     ],
     ctaLabel: 'Start Clinic Setup',
+    ctaTo: '/signup',
+  },
+  {
+    name: 'General Business',
+    price: '$300',
+    period: 'month',
+    description: 'For service businesses like cleaning, repair, salons, and local teams handling live calls',
+    features: [
+      '3-day free trial included',
+      '1 Vapi-owned US phone number',
+      'AI receptionist configured for your business',
+      'Live appointment booking into Receptrix',
+      'Services, hours, and greeting controls',
+      'Dashboard test-call workflow',
+      '500 Vapi voice minutes included',
+      'Priority onboarding support',
+    ],
+    ctaLabel: 'Start Business Setup',
     ctaTo: '/signup',
   },
 ];
@@ -39,9 +58,9 @@ export default function Pricing() {
             Pricing
           </p>
           <h2 className="font-display text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-4">
-            Clinic-ready pricing. <span className="text-white/30">Built for live calls.</span>
+            Reception-ready pricing. <span className="text-white/30">Built for live calls.</span>
           </h2>
-          <p className="text-white/40 text-lg">One monthly plan for the medical clinic demo path.</p>
+          <p className="text-white/40 text-lg">Two monthly plans, both with a 3-day free trial.</p>
         </motion.div>
 
         <motion.div
@@ -49,7 +68,7 @@ export default function Pricing() {
           initial="initial"
           whileInView="animate"
           viewport={{ once: true, margin: '-50px' }}
-          className="mx-auto grid max-w-xl grid-cols-1 gap-5 items-start"
+          className="mx-auto grid max-w-5xl grid-cols-1 gap-5 items-start md:grid-cols-2"
         >
           {tiers.map((tier) => (
             <motion.div key={tier.name} variants={fadeUp}>
