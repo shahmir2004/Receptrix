@@ -1450,6 +1450,7 @@ async def health_check():
             "LEMONSQUEEZY_API_KEY",
             "LEMONSQUEEZY_STORE_ID",
             "LEMONSQUEEZY_MEDICAL_VARIANT_ID",
+            "LEMONSQUEEZY_GENERAL_VARIANT_ID",
             "LEMONSQUEEZY_WEBHOOK_SECRET",
         )
         if not os.getenv(key)

@@ -56,6 +56,12 @@ BUSINESS_NAME=Receptrix
 
 Use `LEMONSQUEEZY_TEST_MODE=true` for deployed checkout testing with no real charge. For real paid production, switch it to `false` and use live Lemon Squeezy store, product, variant, API key, and webhook secret values.
 
+## Lemon Squeezy Trial Setup
+
+Create each paid plan as a Lemon Squeezy subscription product or variant, then enable `Subscription has free trial?` and set the trial length to `3 days`. Receptrix sends `skip_trial=false` when creating checkouts, so the dashboard-configured trial remains active. Lemon Squeezy reports trial subscriptions with status `on_trial`, which Receptrix treats as voice-enabled.
+
+For no-payment testing, keep the Lemon store and API key in Test mode, keep `LEMONSQUEEZY_TEST_MODE=true`, and use Lemon's test card numbers in checkout. Keep `BYPASS_BILLING_FOR_DEMO=false` when testing Lemon itself, otherwise Receptrix will bypass the provider and you will not know whether Lemon is connected.
+
 ## Webhooks
 
 Configure provider webhooks against the deployed backend:

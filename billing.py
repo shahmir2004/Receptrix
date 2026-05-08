@@ -78,7 +78,7 @@ def pricing_plans() -> list[dict[str, Any]]:
 
 
 def is_subscription_active(status: Optional[str]) -> bool:
-    return (status or "").lower() in {"active", "paid", "trialing"}
+    return (status or "").lower() in {"active", "paid", "trialing", "on_trial"}
 
 
 def get_subscription(business_id: str) -> dict[str, Any]:
@@ -146,6 +146,8 @@ async def create_checkout(business_id: str, user_email: str = "") -> dict[str, A
         "product_options": {
             "name": plan["name"],
             "description": plan["description"],
+            "skip_trial": False,
+            "subscription_preview": True,
         },
         "checkout_options": {
             "embed": False,
