@@ -52,6 +52,12 @@ function chooseBusinessId(
   return businesses[0]?.business_id || null;
 }
 
+function hasSessionHint(): boolean {
+  return document.cookie
+    .split('; ')
+    .some((row) => row.startsWith('rx_csrf_token='));
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [businessMemberships, setBusinessMemberships] = useState<BusinessMembership[]>([]);
@@ -208,6 +214,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Initialize session on mount
   useEffect(() => {
     async function init() {
+      if (!hasSessionHint()) {
+        clearAuth();
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const response = await fetch(`${window.location.origin}/auth/me`, {
           method: 'GET',

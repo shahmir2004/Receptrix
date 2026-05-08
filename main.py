@@ -1528,6 +1528,11 @@ async def get_stats(access: Tuple[str, str] = Depends(require_business_access)):
 @app.get("/{full_path:path}")
 async def spa_fallback(full_path: str):
     """Serve React SPA index.html for all non-API routes (client-side routing)."""
+    requested = (FRONTEND_DIR / full_path).resolve()
+    frontend_root = FRONTEND_DIR.resolve()
+    if requested.is_file() and requested.is_relative_to(frontend_root):
+        return FileResponse(str(requested))
+
     index = FRONTEND_DIR / "index.html"
     if index.exists():
         return FileResponse(str(index))

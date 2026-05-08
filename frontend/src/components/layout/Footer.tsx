@@ -21,9 +21,8 @@ export default function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
           {/* Brand column */}
           <div className="col-span-2 md:col-span-1">
-            <Link to="/" className="inline-flex items-center gap-1 mb-4">
-              <span className="text-lg font-semibold tracking-tight text-white">Receptrix</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+            <Link to="/" className="mb-4 inline-flex items-center" aria-label="Receptrix home">
+              <img src="/logo-wordmark.svg" alt="Receptrix" className="h-9 w-auto" />
             </Link>
             <p className="text-sm text-white/40 leading-relaxed mb-6">
               Your AI receptionist that never sleeps. Handle every call, book every appointment.

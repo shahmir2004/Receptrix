@@ -38,12 +38,8 @@ export default function Navbar() {
               : 'bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]'
           )}
         >
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-1.5 shrink-0">
-            <span className="text-[15px] font-semibold tracking-tight text-white font-sans">
-              Receptrix
-            </span>
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+          <Link to="/" className="flex items-center shrink-0" aria-label="Receptrix home">
+            <img src="/logo-wordmark.svg" alt="Receptrix" className="h-8 w-auto" />
           </Link>
 
           {/* Desktop nav links */}
