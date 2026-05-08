@@ -1,6 +1,6 @@
 # Receptrix
 
-Receptrix is a multi-tenant AI voice receptionist SaaS for US medical clinics. A clinic signs up, activates the $300/month medical clinic plan through Lemon Squeezy, provisions a Vapi-owned US phone number, configures its AI receptionist, and books appointments into Supabase-backed tenant data.
+Receptrix is a multi-tenant AI voice receptionist SaaS for clinics and service businesses. A clinic activates the $299.99/month medical clinic plan; a general business activates the $199.99/month plan. Each business provisions a Vapi-owned US phone number, configures its AI receptionist, and books appointments into Supabase-backed tenant data.
 
 ## Stack
 
@@ -31,10 +31,12 @@ Copy `.env.example` to `.env` and set:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_ANON_KEY`
 - `VAPI_API_KEY`
+- `VAPI_PUBLIC_KEY`
 - `VAPI_WEBHOOK_SECRET`
 - `LEMONSQUEEZY_API_KEY`
 - `LEMONSQUEEZY_STORE_ID`
 - `LEMONSQUEEZY_MEDICAL_VARIANT_ID`
+- `LEMONSQUEEZY_GENERAL_VARIANT_ID`
 - `LEMONSQUEEZY_WEBHOOK_SECRET`
 - `SERVER_URL`
 

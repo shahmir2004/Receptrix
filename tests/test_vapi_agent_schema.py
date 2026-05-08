@@ -10,7 +10,7 @@ from pathlib import Path
 os.environ.setdefault("VAPI_WEBHOOK_SECRET", "test-secret")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from vapi_agent import TOOL_NAMES, build_assistant_payload, vapi_tool_payloads
+from vapi_agent import TOOL_NAMES, build_assistant_payload, resolve_business_from_vapi_message, vapi_tool_payloads
 
 
 def test_all_tools_present():
@@ -44,11 +44,27 @@ def test_assistant_payload_is_hipaa_ready():
     print("PASS - assistant payload disables Vapi storage artifacts")
 
 
+def test_vapi_metadata_resolves_demo_business():
+    business_id = "00000000-0000-0000-0000-000000000001"
+    message = {
+        "type": "tool-calls",
+        "call": {
+            "id": "call_demo",
+            "assistantOverrides": {
+                "metadata": {"receptrix_business_id": business_id},
+            },
+        },
+    }
+    assert resolve_business_from_vapi_message(message) == business_id
+    print("PASS - Vapi assistant override metadata resolves landing demo business")
+
+
 if __name__ == "__main__":
     tests = [
         test_all_tools_present,
         test_tool_server_uses_vapi_webhook,
         test_assistant_payload_is_hipaa_ready,
+        test_vapi_metadata_resolves_demo_business,
     ]
     failures = []
     for test in tests:

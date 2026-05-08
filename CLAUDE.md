@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## What Receptrix Is
 
-Receptrix is a multi-tenant AI voice receptionist SaaS for US medical clinics. Each clinic signs up, selects a healthcare business type, activates the $300/month Lemon Squeezy plan, provisions a Vapi-owned US phone number, configures its AI receptionist, and books appointments into Supabase-scoped clinic data.
+Receptrix is a multi-tenant AI voice receptionist SaaS for clinics and service businesses. A clinic activates the $299.99/month Lemon Squeezy plan; a general business activates the $199.99/month plan. Each business provisions a Vapi-owned US phone number, configures its AI receptionist, and books appointments into Supabase-scoped tenant data.
 
 ## Development Commands
 
@@ -65,10 +65,12 @@ Required backend env vars:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_ANON_KEY`
 - `VAPI_API_KEY`
+- `VAPI_PUBLIC_KEY`
 - `VAPI_WEBHOOK_SECRET`
 - `LEMONSQUEEZY_API_KEY`
 - `LEMONSQUEEZY_STORE_ID`
 - `LEMONSQUEEZY_MEDICAL_VARIANT_ID`
+- `LEMONSQUEEZY_GENERAL_VARIANT_ID`
 - `LEMONSQUEEZY_WEBHOOK_SECRET`
 - `SERVER_URL`
 

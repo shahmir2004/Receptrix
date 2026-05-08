@@ -199,6 +199,19 @@ def resolve_business_from_vapi_message(message: dict[str, Any]) -> Optional[str]
     phone_number = message.get("phoneNumber", {}) if isinstance(message.get("phoneNumber"), dict) else {}
     call_phone_number = call.get("phoneNumber", {}) if isinstance(call.get("phoneNumber"), dict) else {}
     call_assistant = call.get("assistant", {}) if isinstance(call.get("assistant"), dict) else {}
+    metadata = message.get("metadata", {}) if isinstance(message.get("metadata"), dict) else {}
+    call_metadata = call.get("metadata", {}) if isinstance(call.get("metadata"), dict) else {}
+    assistant_overrides = call.get("assistantOverrides", {}) if isinstance(call.get("assistantOverrides"), dict) else {}
+    override_metadata = assistant_overrides.get("metadata", {}) if isinstance(assistant_overrides.get("metadata"), dict) else {}
+    variable_values = assistant_overrides.get("variableValues", {}) if isinstance(assistant_overrides.get("variableValues"), dict) else {}
+    metadata_business_id = (
+        metadata.get("receptrix_business_id")
+        or call_metadata.get("receptrix_business_id")
+        or override_metadata.get("receptrix_business_id")
+        or variable_values.get("receptrix_business_id")
+    )
+    if metadata_business_id:
+        return str(metadata_business_id)
 
     return resolve_business_from_vapi(
         phone_number_id=call.get("phoneNumberId") or phone_number.get("id") or call_phone_number.get("id"),

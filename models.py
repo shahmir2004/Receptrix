@@ -46,6 +46,7 @@ class BusinessType(str, Enum):
     SPECIALIST_PRACTICE = "specialist_practice"
     MENTAL_HEALTH = "mental_health"
     OTHER_HEALTHCARE = "other_healthcare"
+    GENERAL_BUSINESS = "general_business"
 
 
 HEALTHCARE_BUSINESS_TYPES = {

@@ -24,6 +24,8 @@ services:
         sync: false
       - key: VAPI_API_KEY
         sync: false
+      - key: VAPI_PUBLIC_KEY
+        sync: false
       - key: VAPI_BASE_URL
         value: https://api.vapi.ai
       - key: VAPI_WEBHOOK_SECRET
@@ -34,6 +36,12 @@ services:
         value: gpt-4o-mini
       - key: VAPI_MAX_CALL_SECONDS
         value: "600"
+      - key: VAPI_DEMO_BUSINESS_ID
+        sync: false
+      - key: VAPI_DEMO_ASSISTANT_ID
+        sync: false
+      - key: VAPI_DEMO_PHONE_NUMBER_ID
+        sync: false
       - key: BYPASS_BILLING_FOR_DEMO
         sync: false
       - key: LEMONSQUEEZY_API_KEY
@@ -41,6 +49,8 @@ services:
       - key: LEMONSQUEEZY_STORE_ID
         sync: false
       - key: LEMONSQUEEZY_MEDICAL_VARIANT_ID
+        sync: false
+      - key: LEMONSQUEEZY_GENERAL_VARIANT_ID
         sync: false
       - key: LEMONSQUEEZY_WEBHOOK_SECRET
         sync: false

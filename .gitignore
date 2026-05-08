@@ -42,3 +42,6 @@ docs/voice-calling-plan.md
 .gstack/
 .claude/
 graphify-out/
+
+# Supabase CLI local state
+supabase/.temp/

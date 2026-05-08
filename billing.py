@@ -1,4 +1,4 @@
-"""Billing helpers for the Lemon Squeezy medical clinic plan."""
+"""Billing helpers for Receptrix Lemon Squeezy plans."""
 
 from __future__ import annotations
 
@@ -14,7 +14,27 @@ from supabase_client import get_supabase
 
 
 MEDICAL_CLINIC_PLAN_ID = "medical_clinic_monthly"
-MEDICAL_CLINIC_PRICE_CENTS = 30000
+GENERAL_BUSINESS_PLAN_ID = "general_business_monthly"
+MEDICAL_CLINIC_PRICE_CENTS = 29999
+GENERAL_BUSINESS_PRICE_CENTS = 19999
+
+
+def _plan_for_business_type(business_type: str) -> dict[str, Any]:
+    if (business_type or "").strip().lower() == "general_business":
+        return {
+            "id": GENERAL_BUSINESS_PLAN_ID,
+            "name": "Receptrix General Business",
+            "price_cents": GENERAL_BUSINESS_PRICE_CENTS,
+            "variant_env": "LEMONSQUEEZY_GENERAL_VARIANT_ID",
+            "description": "$199.99/month AI receptionist for service businesses.",
+        }
+    return {
+        "id": MEDICAL_CLINIC_PLAN_ID,
+        "name": "Receptrix Medical Clinic",
+        "price_cents": MEDICAL_CLINIC_PRICE_CENTS,
+        "variant_env": "LEMONSQUEEZY_MEDICAL_VARIANT_ID",
+        "description": "$299.99/month AI receptionist for US medical clinics.",
+    }
 
 
 def pricing_plans() -> list[dict[str, Any]]:
@@ -36,7 +56,24 @@ def pricing_plans() -> list[dict[str, Any]]:
                 "HIPAA-ready call handling",
                 "Dashboard AI settings and test calls",
             ],
-        }
+        },
+        {
+            "id": GENERAL_BUSINESS_PLAN_ID,
+            "name": "General Business",
+            "business_type": "general_business",
+            "price_cents": GENERAL_BUSINESS_PRICE_CENTS,
+            "currency": "USD",
+            "interval": "month",
+            "included_vapi_numbers": 1,
+            "included_voice_minutes": 500,
+            "features": [
+                "Vapi US phone number",
+                "AI receptionist configured for service businesses",
+                "Live appointment scheduling into Receptrix",
+                "Services, hours, and greeting controls",
+                "Dashboard AI settings and test calls",
+            ],
+        },
     ]
 
 
@@ -47,6 +84,9 @@ def is_subscription_active(status: Optional[str]) -> bool:
 def get_subscription(business_id: str) -> dict[str, Any]:
     """Fetch the latest stored subscription state for a business."""
     sb = get_supabase()
+    business = sb.table("businesses").select("business_type").eq("id", business_id).limit(1).execute()
+    business_type = business.data[0].get("business_type", "medical_clinic") if business.data else "medical_clinic"
+    plan = _plan_for_business_type(business_type)
     result = sb.table("business_subscriptions").select("*").eq(
         "business_id", business_id
     ).order("updated_at", desc=True).limit(1).execute()
@@ -57,14 +97,14 @@ def get_subscription(business_id: str) -> dict[str, Any]:
     if os.getenv("BYPASS_BILLING_FOR_DEMO", "false").lower() in {"1", "true", "yes", "on"}:
         return {
             "business_id": business_id,
-            "plan_id": MEDICAL_CLINIC_PLAN_ID,
+            "plan_id": plan["id"],
             "status": "active",
             "voice_features_enabled": True,
             "demo_billing_bypass": True,
         }
     return {
         "business_id": business_id,
-        "plan_id": MEDICAL_CLINIC_PLAN_ID,
+        "plan_id": plan["id"],
         "status": "pending",
         "voice_features_enabled": False,
     }
@@ -79,17 +119,22 @@ def sync_business_billing_status(business_id: str, status: str) -> None:
 
 
 async def create_checkout(business_id: str, user_email: str = "") -> dict[str, Any]:
-    """Create a Lemon Squeezy checkout URL for the clinic plan."""
+    """Create a Lemon Squeezy checkout URL for the business's plan."""
     api_key = os.getenv("LEMONSQUEEZY_API_KEY", "").strip()
     store_id = os.getenv("LEMONSQUEEZY_STORE_ID", "").strip()
-    variant_id = os.getenv("LEMONSQUEEZY_MEDICAL_VARIANT_ID", "").strip()
+    business = get_supabase().table("businesses").select("business_type").eq(
+        "id", business_id
+    ).limit(1).execute()
+    business_type = business.data[0].get("business_type", "medical_clinic") if business.data else "medical_clinic"
+    plan = _plan_for_business_type(business_type)
+    variant_id = os.getenv(plan["variant_env"], "").strip()
     if not api_key or not store_id or not variant_id:
-        raise RuntimeError("LEMONSQUEEZY_API_KEY, LEMONSQUEEZY_STORE_ID, and LEMONSQUEEZY_MEDICAL_VARIANT_ID must be set.")
+        raise RuntimeError(f"LEMONSQUEEZY_API_KEY, LEMONSQUEEZY_STORE_ID, and {plan['variant_env']} must be set.")
 
     checkout_data: dict[str, Any] = {
         "custom": {
             "business_id": business_id,
-            "plan_id": MEDICAL_CLINIC_PLAN_ID,
+            "plan_id": plan["id"],
         }
     }
     if user_email:
@@ -97,10 +142,10 @@ async def create_checkout(business_id: str, user_email: str = "") -> dict[str, A
 
     attributes = {
         "checkout_data": checkout_data,
-        "custom_price": MEDICAL_CLINIC_PRICE_CENTS,
+        "custom_price": plan["price_cents"],
         "product_options": {
-            "name": "Receptrix Medical Clinic",
-            "description": "$300/month AI receptionist for US medical clinics.",
+            "name": plan["name"],
+            "description": plan["description"],
         },
         "checkout_options": {
             "embed": False,
@@ -147,14 +192,14 @@ async def create_checkout(business_id: str, user_email: str = "") -> dict[str, A
     now = datetime.now().isoformat()
     get_supabase().table("business_subscriptions").upsert({
         "business_id": business_id,
-        "plan_id": MEDICAL_CLINIC_PLAN_ID,
+        "plan_id": plan["id"],
         "provider": "lemonsqueezy",
         "status": "checkout_started",
         "provider_checkout_id": data.get("data", {}).get("id"),
         "updated_at": now,
     }, on_conflict="business_id").execute()
 
-    return {"checkout_url": checkout_url, "plan_id": MEDICAL_CLINIC_PLAN_ID}
+    return {"checkout_url": checkout_url, "plan_id": plan["id"]}
 
 
 def verify_lemonsqueezy_signature(raw_body: bytes, signature: str) -> bool:

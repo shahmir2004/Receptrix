@@ -219,6 +219,17 @@ class TestCallRequest(BaseModel):
     customer_phone: str
 
 
+class DemoCallRequest(BaseModel):
+    customer_phone: str
+    consent: bool = False
+
+
+class DemoWebCallConfig(BaseModel):
+    public_key: str
+    assistant_id: str
+    business_id: str
+
+
 _SESSION_COOKIES = session_cookie_names()
 
 
@@ -722,6 +733,74 @@ def _billing_allows_voice(business_id: str) -> bool:
     return is_subscription_active(subscription.get("status"))
 
 
+def _normalize_customer_phone(value: str) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Enter the phone number to call.")
+
+    prefix = "+" if raw.startswith("+") else ""
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        raise HTTPException(status_code=422, detail="Enter a valid phone number.")
+
+    if prefix:
+        phone = f"+{digits}"
+    elif len(digits) == 10:
+        phone = f"+1{digits}"
+    elif len(digits) == 11 and digits.startswith("1"):
+        phone = f"+{digits}"
+    elif digits.startswith("00") and len(digits) > 8:
+        phone = f"+{digits[2:]}"
+    else:
+        raise HTTPException(status_code=422, detail="Use E.164 format, for example +14155551212.")
+
+    normalized_digits = phone[1:]
+    if len(normalized_digits) < 8 or len(normalized_digits) > 15:
+        raise HTTPException(status_code=422, detail="Use E.164 format, for example +14155551212.")
+    return phone
+
+
+def _landing_demo_assistant_config() -> tuple[str, str, dict]:
+    business_id = os.getenv("VAPI_DEMO_BUSINESS_ID", "00000000-0000-0000-0000-000000000001").strip()
+    assistant_id = os.getenv("VAPI_DEMO_ASSISTANT_ID", "").strip()
+    row: dict = {}
+
+    if assistant_id:
+        return business_id, assistant_id, row
+
+    try:
+        from supabase_client import get_supabase
+
+        voice = get_supabase().table("vapi_phone_numbers").select("*").eq(
+            "business_id", business_id
+        ).in_("status", ["active", "provisioning"]).limit(1).execute()
+    except Exception:
+        logger.warning("Unable to load landing demo Vapi config", exc_info=True)
+        voice = None
+
+    if voice and voice.data:
+        row = voice.data[0]
+        assistant_id = assistant_id or (row.get("vapi_assistant_id") or "")
+
+    if not assistant_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Demo calling is not configured yet. Set VAPI_DEMO_ASSISTANT_ID or provision the demo business voice line.",
+        )
+    return business_id, assistant_id, row
+
+
+def _landing_demo_voice_config() -> tuple[str, str, str]:
+    business_id, assistant_id, row = _landing_demo_assistant_config()
+    phone_number_id = os.getenv("VAPI_DEMO_PHONE_NUMBER_ID", "").strip() or (row.get("vapi_phone_number_id") or "")
+    if not phone_number_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Phone demo calling is not configured yet. Set VAPI_DEMO_PHONE_NUMBER_ID or provision the demo business voice line.",
+        )
+    return business_id, assistant_id, phone_number_id
+
+
 async def _ensure_vapi_tools(
     client: VapiClient,
     server_url: str,
@@ -922,6 +1001,66 @@ async def start_vapi_test_call(
     except Exception as exc:
         logger.exception("Vapi test call failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/demo/call")
+@limiter.limit("3/minute")
+async def start_landing_demo_call(request: Request, req: DemoCallRequest):
+    if not req.consent:
+        raise HTTPException(status_code=422, detail="Confirm consent to receive one automated demo call.")
+
+    customer_phone = _normalize_customer_phone(req.customer_phone)
+    business_id, assistant_id, phone_number_id = _landing_demo_voice_config()
+
+    try:
+        call = await VapiClient().create_call({
+            "assistantId": assistant_id,
+            "phoneNumberId": phone_number_id,
+            "customer": {"number": customer_phone},
+            "assistantOverrides": {
+                "firstMessage": (
+                    "Hi, this is Receptrix calling with your live AI receptionist demo. "
+                    "Please use fake patient details during this demo, and I can show you how I answer questions, "
+                    "check availability, and book a test appointment."
+                )
+            },
+            "metadata": {
+                "receptrix_business_id": business_id,
+                "source": "landing_page_demo",
+                "demo_call": "true",
+            },
+        })
+        return {
+            "success": True,
+            "message": "Demo call started. Receptrix should call this number shortly.",
+            "call_id": call.get("id"),
+        }
+    except VapiConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        logger.error("Landing demo Vapi call failed: %s", exc.response.text)
+        raise HTTPException(status_code=502, detail="Unable to start the demo call right now.") from exc
+    except Exception as exc:
+        logger.exception("Landing demo Vapi call failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/demo/web-call-config", response_model=DemoWebCallConfig)
+@limiter.limit("30/minute")
+async def get_landing_demo_web_call_config(request: Request):
+    public_key = (
+        os.getenv("VAPI_PUBLIC_KEY", "").strip()
+        or os.getenv("VAPI_WEB_PUBLIC_KEY", "").strip()
+    )
+    if not public_key:
+        raise HTTPException(status_code=503, detail="Vapi public key is not configured yet.")
+
+    business_id, assistant_id, _ = _landing_demo_assistant_config()
+    return {
+        "public_key": public_key,
+        "assistant_id": assistant_id,
+        "business_id": business_id,
+    }
 
 
 @app.post("/webhooks/vapi")
@@ -1295,6 +1434,14 @@ async def health_check():
     voice_ok = bool(os.getenv("VAPI_API_KEY") and os.getenv("VAPI_WEBHOOK_SECRET"))
     checks["voice_provider"] = "vapi" if voice_ok else "vapi (credentials missing)"
     if require_prod_ready and not voice_ok:
+        overall_ok = False
+
+    web_demo_ok = bool(
+        (os.getenv("VAPI_PUBLIC_KEY") or os.getenv("VAPI_WEB_PUBLIC_KEY"))
+        and os.getenv("VAPI_DEMO_ASSISTANT_ID")
+    )
+    checks["web_voice_demo"] = "configured" if web_demo_ok else "missing VAPI_PUBLIC_KEY or VAPI_DEMO_ASSISTANT_ID"
+    if require_prod_ready and not web_demo_ok:
         overall_ok = False
 
     billing_bypass = os.getenv("BYPASS_BILLING_FOR_DEMO", "false").strip().lower() in {"1", "true", "yes", "on"}

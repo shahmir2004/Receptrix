@@ -9,7 +9,8 @@ ALTER TABLE businesses
             'urgent_care',
             'specialist_practice',
             'mental_health',
-            'other_healthcare'
+            'other_healthcare',
+            'general_business'
         )),
     ADD COLUMN IF NOT EXISTS hipaa_mode BOOLEAN NOT NULL DEFAULT TRUE,
     ADD COLUMN IF NOT EXISTS billing_status TEXT NOT NULL DEFAULT 'pending',
@@ -75,7 +76,31 @@ INSERT INTO pricing_plans (
     'medical_clinic_monthly',
     'Medical Clinic',
     'medical_clinic',
-    30000,
+    29999,
+    'USD',
+    'month',
+    1,
+    500
+) ON CONFLICT (id) DO UPDATE SET
+    price_cents = EXCLUDED.price_cents,
+    included_vapi_numbers = EXCLUDED.included_vapi_numbers,
+    included_voice_minutes = EXCLUDED.included_voice_minutes,
+    is_active = TRUE;
+
+INSERT INTO pricing_plans (
+    id,
+    name,
+    business_type,
+    price_cents,
+    currency,
+    interval,
+    included_vapi_numbers,
+    included_voice_minutes
+) VALUES (
+    'general_business_monthly',
+    'General Business',
+    'general_business',
+    19999,
     'USD',
     'month',
     1,

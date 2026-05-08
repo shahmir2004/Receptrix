@@ -25,6 +25,7 @@ export default defineConfig({
       '/config': 'http://localhost:8000',
       '/pricing': 'http://localhost:8000',
       '/billing': 'http://localhost:8000',
+      '/demo': 'http://localhost:8000',
     },
   },
 })

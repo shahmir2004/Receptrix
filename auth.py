@@ -572,7 +572,7 @@ def create_business_for_user(
         raise _http_error(
             422,
             "INVALID_BUSINESS_TYPE",
-            "Business type must be one of: medical_clinic, dental_clinic, urgent_care, specialist_practice, mental_health, other_healthcare.",
+            "Business type must be one of: medical_clinic, dental_clinic, urgent_care, specialist_practice, mental_health, other_healthcare, general_business.",
         )
 
     default_timezone = os.getenv("DEFAULT_BUSINESS_TIMEZONE", "America/New_York")

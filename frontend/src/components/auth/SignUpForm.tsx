@@ -130,6 +130,7 @@ export default function SignUpForm() {
           <option value="specialist_practice">Specialist practice</option>
           <option value="mental_health">Mental health practice</option>
           <option value="other_healthcare">Other healthcare</option>
+          <option value="general_business">General business</option>
         </select>
       </div>
 

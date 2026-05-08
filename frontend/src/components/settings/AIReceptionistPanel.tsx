@@ -200,8 +200,8 @@ export function AIReceptionistPanel() {
               {subscription?.status || 'pending'}
             </Badge>
           </div>
-          <p className="text-2xl font-bold text-white">$300/mo</p>
-          <p className="mt-1 text-sm text-white/45">Medical clinic plan</p>
+          <p className="text-2xl font-bold text-white">$299.99/mo</p>
+          <p className="mt-1 text-sm text-white/45">Clinic plan</p>
           {!billingActive && (
             <Button onClick={startCheckout} disabled={billing} className="mt-4 w-full bg-indigo-600 text-white hover:bg-indigo-700">
               {billing ? 'Opening...' : 'Activate Billing'}

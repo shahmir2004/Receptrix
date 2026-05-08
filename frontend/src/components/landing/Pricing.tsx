@@ -5,7 +5,7 @@ import PricingCard from './PricingCard';
 const tiers = [
   {
     name: 'Medical Clinic',
-    price: '$300',
+    price: '$299.99',
     period: 'month',
     description: 'For US clinics launching an AI receptionist with live appointment scheduling',
     popular: true,
@@ -25,7 +25,7 @@ const tiers = [
   },
   {
     name: 'General Business',
-    price: '$300',
+    price: '$199.99',
     period: 'month',
     description: 'For service businesses like cleaning, repair, salons, and local teams handling live calls',
     features: [
