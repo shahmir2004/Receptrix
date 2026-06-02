@@ -1,35 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="receptrix-icon-title">
+  <title id="receptrix-icon-title">Receptrix icon</title>
   <defs>
-    <!-- Dark background gradient -->
-    <linearGradient id="ic-bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#110826"/>
-      <stop offset="55%"  stop-color="#090612"/>
-      <stop offset="100%" stop-color="#06060b"/>
+    <linearGradient id="rx-bg" x1="48" y1="32" x2="464" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#15112B"/>
+      <stop offset="0.5" stop-color="#07070D"/>
+      <stop offset="1" stop-color="#020204"/>
     </linearGradient>
-
-    <!-- Bolt: light lavender at apex → vibrant purple mid → deep violet base -->
-    <linearGradient id="ic-bolt" x1="256" y1="72" x2="256" y2="440" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#f5f0ff"/>
-      <stop offset="28%"  stop-color="#bc8aff"/>
-      <stop offset="62%"  stop-color="#863bff"/>
-      <stop offset="100%" stop-color="#4c00af"/>
+    <radialGradient id="rx-bloom" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(272 288) rotate(90) scale(210 230)">
+      <stop offset="0" stop-color="#6D28D9" stop-opacity="0.72"/>
+      <stop offset="0.58" stop-color="#4F46E5" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#020204" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rx-stroke" x1="132" y1="96" x2="392" y2="408" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4F0FF"/>
+      <stop offset="0.4" stop-color="#8B5CF6"/>
+      <stop offset="0.72" stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#22D3EE"/>
     </linearGradient>
-
-    <!-- Border shimmer: purple → cyan → purple -->
-    <linearGradient id="ic-border" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#863bff" stop-opacity="0.55"/>
-      <stop offset="48%"  stop-color="#47bfff" stop-opacity="0.30"/>
-      <stop offset="100%" stop-color="#863bff" stop-opacity="0.15"/>
+    <linearGradient id="rx-border" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A78BFA" stop-opacity="0.52"/>
+      <stop offset="0.5" stop-color="#22D3EE" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#6366F1" stop-opacity="0.14"/>
     </linearGradient>
-
-    <!-- Soft bloom for background glow layers -->
-    <filter id="ic-bloom" x="-70%" y="-70%" width="240%" height="240%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="32"/>
-    </filter>
-
-    <!-- Sharp glow composited onto the bolt -->
-    <filter id="ic-bolt-glow" x="-18%" y="-12%" width="136%" height="124%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="11" result="blur"/>
+    <filter id="rx-mark-glow" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
       <feMerge>
         <feMergeNode in="blur"/>
         <feMergeNode in="SourceGraphic"/>
@@ -37,31 +31,44 @@
     </filter>
   </defs>
 
-  <!-- Rounded square background -->
-  <rect width="512" height="512" rx="88" fill="url(#ic-bg)"/>
+  <rect width="512" height="512" rx="92" fill="url(#rx-bg)"/>
+  <rect width="512" height="512" rx="92" fill="url(#rx-bloom)"/>
+  <circle cx="378" cy="142" r="76" fill="#22D3EE" opacity="0.12"/>
+  <circle cx="174" cy="378" r="118" fill="#8B5CF6" opacity="0.16"/>
 
-  <!-- Glow layers (back to front) -->
-
-  <!-- Deep violet base bloom -->
-  <ellipse cx="256" cy="290" rx="195" ry="145" fill="#4a00b0" opacity="0.38" filter="url(#ic-bloom)"/>
-
-  <!-- Primary purple bloom -->
-  <ellipse cx="256" cy="310" rx="150" ry="110" fill="#7e14ff" opacity="0.50" filter="url(#ic-bloom)"/>
-
-  <!-- Cyan accent — upper-right spark -->
-  <ellipse cx="368" cy="152" rx="88" ry="54" fill="#47bfff" opacity="0.18" filter="url(#ic-bloom)"/>
-
-  <!-- Subtle lavender top-centre highlight -->
-  <ellipse cx="256" cy="120" rx="80" ry="48" fill="#c8aaff" opacity="0.14" filter="url(#ic-bloom)"/>
-
-  <!-- Bolt mark — scale=8 → 384×368 px, centred in 512×512 at (64, 72) -->
-  <g transform="translate(64, 72) scale(8)" filter="url(#ic-bolt-glow)">
+  <g filter="url(#rx-mark-glow)">
     <path
-      fill="url(#ic-bolt)"
-      d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z"
+      d="M150 360V156c0-31 25-56 56-56h80c66 0 120 54 120 120s-54 120-120 120h-68"
+      fill="none"
+      stroke="url(#rx-stroke)"
+      stroke-width="44"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M238 260l136 118"
+      fill="none"
+      stroke="url(#rx-stroke)"
+      stroke-width="44"
+      stroke-linecap="round"
+    />
+    <path
+      d="M292 142c44 22 72 64 72 112"
+      fill="none"
+      stroke="#C4B5FD"
+      stroke-width="18"
+      stroke-linecap="round"
+      opacity="0.9"
+    />
+    <path
+      d="M402 158c43 43 43 113 0 156"
+      fill="none"
+      stroke="#22D3EE"
+      stroke-width="20"
+      stroke-linecap="round"
+      opacity="0.82"
     />
   </g>
 
-  <!-- Border shimmer ring -->
-  <rect width="512" height="512" rx="88" fill="none" stroke="url(#ic-border)" stroke-width="1.5"/>
+  <rect width="512" height="512" rx="92" fill="none" stroke="url(#rx-border)" stroke-width="2"/>
 </svg>
